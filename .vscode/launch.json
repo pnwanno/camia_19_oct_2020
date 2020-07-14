@@ -1,0 +1,35 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Ptobs",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "192.168.1.25:2020",
+        },
+        {
+            "name": "Kjut",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "192.168.1.23:2021"
+        },
+        {
+            "name": "Tab",
+            "type": "dart",
+            "request": "launch",
+            "program": "lib/main.dart",
+            "deviceId": "192.168.1.24:2022"
+        },
+    ],
+    "compounds": [
+		{
+			"name": "All Devices",
+			"configurations": ["Ptobs", "Kjut", "Tab"],
+		}
+	]
+}
