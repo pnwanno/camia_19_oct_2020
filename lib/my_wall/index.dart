@@ -67,7 +67,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       );
     }
     catch(ex){
-      showToast(
+      _kjToast.showToast(
         text: "Like is disabled in offline mode",
         duration: Duration(seconds: 5)
       );
@@ -126,7 +126,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             return true;
           }
           else{
-            showToast(
+            _kjToast.showToast(
                 text: "Can't comment - It seems you are logged out",
                 duration: Duration(seconds: 3)
             );
@@ -134,7 +134,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
           }
         }
         else{
-          showToast(
+          _kjToast.showToast(
             text: "Can't comment now - try again later",
             duration: Duration(seconds: 3)
           );
@@ -142,7 +142,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         }
       }
       catch(ex){
-        showToast(
+        _kjToast.showToast(
             text: "Can't comment - Offline mode",
             duration: Duration(seconds: 5)
         );
@@ -158,14 +158,11 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   var _serverData;
   bool refreshData=true;
   String postPos="0";
-  
+
 
   Future<void> fetchPosts({String caller})async{
     bool resp= await fetchLocalData(caller: caller);
-    if(resp){_kjToast.showToast(
-      text: "Hello just tested the global toast",
-      duration: Duration(seconds: 5)
-    );
+    if(resp){
       renderWall();
     }
   }//fetch posts
@@ -935,9 +932,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
               pullRefreshHeight +=(dist/3);
               pullRefreshCtr.add("kjut");
             }
-            else{
-              debugPrint("Time to hit refresh");
-            }
           }
         },
         child: child
@@ -1179,7 +1173,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       }
     }
     catch(ex){
-      showToast(
+      _kjToast.showToast(
         text: "Offline mode - get connected for updated contents",
         duration: Duration(seconds: 3)
       );
@@ -1319,7 +1313,12 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                 ),
               ),//the page's actual content
 
-              _kjToast
+              StreamBuilder(
+                stream: _pageLoadedNotifier.stream,
+                builder: (BuildContext ctx, AsyncSnapshot snapshot){
+                  return snapshot.hasData ? _kjToast : Container();
+                },
+              )
             ],
           ),
         ),//page container,
@@ -1338,14 +1337,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     );
   }//pagebody
   StreamController toastCtrl=StreamController.broadcast();
-  ///Mimics the native android toast
-  showToast({String text, Duration duration}){
-    toastCtrl.add({
-      "visible": true,
-      "text": text,
-      "duration": duration
-    });
-  }//show toast
 
   ///Convenient method to pause all playing videos
   pauseAllVids(){
@@ -1354,6 +1345,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     });
   }
 
+  StreamController _pageLoadedNotifier= StreamController.broadcast();
   final Map<String, GlobalKey> _wallBlockKeys= Map<String, GlobalKey>();
   AnimationController _likeAniCtr;
   Animation<double> _likeAni;
@@ -1431,6 +1423,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     );
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
       _kjToast = globals.KjToast(_globalFontSize, _screenSize, toastCtrl);
+      _pageLoadedNotifier.add("kjut");
     });
   }
 

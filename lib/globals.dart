@@ -1,7 +1,7 @@
 library camia.globals;
 
 import 'dart:async';
-
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 String email="";
@@ -97,4 +97,71 @@ class KjToast extends StatelessWidget{
       "duration": duration
     });
   }//show toast
+}
+
+
+class KjutPullRefresh extends StatefulWidget{
+  _KjutPullRefresh createState(){
+    return _KjutPullRefresh();
+  }
+  final double pullRefreshLoadHeight;
+  final ScrollController listViewCtr;
+  final cb;
+  final Widget child;
+  KjutPullRefresh({
+    this.pullRefreshLoadHeight,
+    this.listViewCtr,
+    this.cb,
+    this.child
+  });
+}
+
+class _KjutPullRefresh extends State<KjutPullRefresh>{
+  @override
+  Widget build(BuildContext context) {
+    return kjPullToRefresh(child: widget.child);
+  }
+
+  StreamController _pullRefreshCtr= StreamController.broadcast();
+  double _pullRefreshHeight=0;
+  ///Pass a listview as child widget to this widget
+  Widget kjPullToRefresh({Widget child}){
+    return Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerUp: (PointerUpEvent pue){
+          if(_pullRefreshHeight< widget.pullRefreshLoadHeight){
+            _pullRefreshHeight =0;
+            _pullRefreshCtr.add("kjut");
+          }
+          else{
+            Future.delayed(
+                Duration(milliseconds: 1500),
+                    (){
+                  //call the refresh function
+                  _pullRefreshHeight=0;
+                  _pullRefreshCtr.add("kjut");
+                  widget.cb();
+                }
+            );
+          }
+        },
+        onPointerMove: (PointerMoveEvent pme){
+          Offset _delta= pme.delta;
+          if(widget.listViewCtr.position.atEdge && !_delta.direction.isNegative){
+            double dist= math.sqrt(_delta.distanceSquared);
+            if(_pullRefreshHeight < widget.pullRefreshLoadHeight){
+              _pullRefreshHeight +=(dist/3);
+              _pullRefreshCtr.add("kjut");
+            }
+          }
+        },
+        child: child
+    );
+  }//kjut pull to refresh
+
+  @override
+  void dispose() {
+    super.dispose();
+    _pullRefreshCtr.close();
+  }
 }

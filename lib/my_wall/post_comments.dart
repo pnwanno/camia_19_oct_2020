@@ -69,7 +69,25 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
   ///Updates the local database with the updates on the current post
   Future refreshPost()async{
     try{
-
+      String _url=globals.globBaseUrl + "?process_as";
+      http.post(
+        _url,
+        body: {
+          "post_id": widget._gPostID
+        }
+      ).then((_resp)async{
+        if(_resp.statusCode == 200){
+          var _respObj= jsonDecode(_resp.body);
+          Database _con= await dbTables.wallPosts();
+          String _postTime= _respObj["post_time"];
+          String _postLikes= jsonEncode(_respObj["likes"]);
+          String _postComments= jsonEncode(_respObj["comments"]);
+          String _localPostID= widget._gPostID;
+          _con.execute("update wall_posts set likes=?, comments, time_str where post_id=?", [
+            _postLikes, _postComments, _postTime, _localPostID
+          ]);
+        }
+      });
     }
     catch(ex){
 
@@ -77,7 +95,20 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
   }
 
   likeComment(String _commentId){
+    try{
+      String _url= globals.globBaseUrl + "?process=like_wall_comment";
+      http.post(
+        _url,
+        body: {
+          "post_id": widget._gPostID,
+          "comment_id": _commentId,
+          "user_id": globals.userId
+        }
+      );
+    }
+    catch(ex){
 
+    }
   }
 
   convertToK(int val){
@@ -558,14 +589,4 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
         child: child
     );
   }//kjut pull to refresh
-
-  StreamController _toastCtrl= StreamController.broadcast();
-  ///Mimics the native android toast
-  showToast({String text, Duration duration}){
-    _toastCtrl.add({
-      "visible": true,
-      "text": text,
-      "duration": duration
-    });
-  }//show toast
 }
