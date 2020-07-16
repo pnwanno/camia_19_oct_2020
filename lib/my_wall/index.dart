@@ -18,6 +18,7 @@ import '../globals.dart' as globals;
 import '../dbs.dart';
 import './my_profile.dart';
 import './post_comments.dart';
+import './post_likes.dart';
 
 class MyWall extends StatefulWidget{
   _MyWall createState(){
@@ -651,7 +652,13 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                     color: Colors.transparent,
                     child: InkResponse(
                       onTap: (){
-                        
+                        Navigator.of(_pageContext).push(
+                          MaterialPageRoute(
+                            builder: (BuildContext ctx){
+                              return WallPostLikers(postId);
+                            }
+                          )
+                        );
                       },
                       child: Text(
                         wallLikers.length==1 ? "1 like" : convertToK(wallLikers.length) + " likes",
@@ -761,6 +768,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             padding: EdgeInsets.only(left:12, right:12),
             child: GestureDetector(
               onTap: (){
+                pauseAllVids();
                 Navigator.push(
                     _pageContext,
                     MaterialPageRoute(
@@ -941,7 +949,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   ///Get's local data before updating with server data
   Future<bool> fetchLocalData({String caller}) async{
     Database con= await dbTables.wallPosts();
-    var result=await con.rawQuery("select * from wall_posts where status='complete' order by cast(post_id as unsigned) desc");
+    var result=await con.rawQuery("select * from wall_posts where status='complete' and section='following' order by cast(post_id as unsigned) desc");
 
     _serverData= result;
     if(caller == "init"){
@@ -969,7 +977,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         RegExp _vidFExp= RegExp(r"\.mp4$", caseSensitive: false);
         //let's get existing posts
         Database _con= await dbTables.wallPosts();
-        var _result= await _con.rawQuery("select post_id from wall_posts where status='complete'");
+        var _result= await _con.rawQuery("select post_id from wall_posts where status='complete' and section='following'");
         List<String> _pids=List<String>();
         int _resultCount=_result.length;
         
@@ -991,9 +999,9 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
           if(_pids.indexOf(_targPID)<0){
             //new post item from server or probably an old post that was not processed to completion due errors - videoplayer error
 
-            //check that this post does was not present before
-            var _checkPostResult= await _con.rawQuery("select * from wall_posts where post_id='$_targPID'");
-            if(_checkPostResult.length==1){
+            //check if this post was not successfully processed the last time
+            var _checkPostResult= await _con.rawQuery("select * from wall_posts where post_id='$_targPID' and status='pending'");
+            if(_checkPostResult.length>0){
               var _checkPostImages=jsonDecode(_checkPostResult[0]["post_images"]);
               int _checkPostImagesCount= _checkPostImages.length;
               for(int _j=0; _j<_checkPostImagesCount; _j++){
@@ -1007,7 +1015,12 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
               }
               await _con.execute("delete from wall_posts where post_id='$_targPID'");
               return;
-            }
+            }//the post was not fully processed for some reasons
+
+            //check if this post have been saved before but not as 'following' post
+            var _checkPostExistsDifferently= await _con.rawQuery("select * from wall_posts where post_id='$_targPID' and status='complete'");
+            if(_checkPostExistsDifferently.length == 1) continue;
+
 
             List<Map<String, String>> _postImages= List<Map<String, String>>();
             var _serverPImages= _respObj[_k]["images"];
@@ -1032,6 +1045,8 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             }
             String _jsonPostImages= jsonEncode(_postImages);
 
+            String _kita= DateTime.now().millisecondsSinceEpoch.toString();
+            String _section="following";
             String _status="pending";
             String _uid=_respObj[_k]["user_id"];
             String _postText=_respObj[_k]["post_text"];
@@ -1046,7 +1061,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             if(_postDP.length>1){
               String _postDPURL="$_postDP";
               List<String> _brkPostDP= _postDP.split("/");
-              _postDP= DateTime.now().millisecondsSinceEpoch.toString() + _brkPostDP.last;
+              _postDP= _kita + _brkPostDP.last;
               http.readBytes(_postDPURL).then((_postDPBytesData){
                 File(_postDir.path + "/$_postDP").writeAsBytes(_postDPBytesData);
               });
@@ -1054,8 +1069,8 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             String _username=_respObj[_k]["username"];
             String _fullname=_respObj[_k]["fullname"];
             _con.execute(
-              "insert into wall_posts (post_id, user_id, post_images, post_text, views, time_str, likes, comments, post_link_to, status, book_marked, media_server_loc, dp, username, fullname) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-              [_targPID, _uid, _jsonPostImages, _postText, _views, _time, _likes, _comments, _linkTo, _status, _bookmarked, _mediaServerLoc, _postDP, _username, _fullname]
+              "insert into wall_posts (post_id, user_id, post_images, post_text, views, time_str, likes, comments, post_link_to, status, book_marked, media_server_loc, dp, username, fullname, section, save_time) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+              [_targPID, _uid, _jsonPostImages, _postText, _views, _time, _likes, _comments, _linkTo, _status, _bookmarked, _mediaServerLoc, _postDP, _username, _fullname, _section, _kita]
             );
             //delete the oldest post if local post count reaches the set threshold
             var _locResult= await _con.rawQuery("select id from wall_posts");
@@ -1422,7 +1437,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       reverse: true,
     );
     WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _kjToast = globals.KjToast(_globalFontSize, _screenSize, toastCtrl);
+      _kjToast = globals.KjToast(_globalFontSize, _screenSize, toastCtrl, _screenSize.height * .4);
       _pageLoadedNotifier.add("kjut");
     });
   }

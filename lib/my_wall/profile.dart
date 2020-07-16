@@ -1,7 +1,4 @@
-import 'package:flutter/cupertino.dart';
-
 import 'package:flutter/material.dart';
-
 
 class WallProfile extends StatefulWidget{
   _WallProfile createState(){

@@ -14,14 +14,15 @@ String userId="";
 String globBaseUrl="https://camia.blwcampusministry.com/app-engine/front-api.php";
 
 class KjToast extends StatelessWidget{
-  KjToast(this._globalFontSize, this._screenSize, this._toastCtrl);
+  KjToast(this._globalFontSize, this._screenSize, this._toastCtrl, this._bottomPosition);
   final Size _screenSize;
   final double _globalFontSize;
   final StreamController _toastCtrl;
+  final double _bottomPosition;
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0, bottom: _screenSize.height * .4,
+      left: 0, bottom: _bottomPosition,
       child: IgnorePointer(
         ignoring: true,
         child: Container(
