@@ -19,6 +19,7 @@ import '../dbs.dart';
 import './my_profile.dart';
 import './post_comments.dart';
 import './post_likes.dart';
+import './profile.dart';
 
 class MyWall extends StatefulWidget{
   _MyWall createState(){
@@ -74,20 +75,86 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       );
     }
   }//like unlike post
+
   RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);
   RegExp _href= RegExp(r"[a-z0-9-]+\.[a-z0-9-]+", caseSensitive: false);
   RegExp _atTag= RegExp(r"^@[a-z0-9_]+$", caseSensitive: false);
-  
+  RegExp _isEmail= RegExp(r"^[a-z_0-9.-]+\@[a-z0-9-]+\.[a-z0-9-]+(\.[a-z0-9-]+)*$", caseSensitive: false);
+  RegExp _phoneExp= RegExp(r"^[0-9 -]+$");
+
   ///Tries to open a URL or a local link (an app link)
   followLink(String _link){
-    if(_href.hasMatch(_link)){
-      urlLauncher.canLaunch(_link).then((_canLaunch) {
+    if(_isEmail.hasMatch(_link)){
+      urlLauncher.canLaunch("mailto:$_link").then((_canLaunch) {
         if(_canLaunch){
-          urlLauncher.launch(_link);
+          urlLauncher.launch("mailto:$_link");
+        }
+      });
+    }
+    else if(_href.hasMatch(_link)){
+      String _newhref= "https://" + _link.replaceAll(RegExp(r"^https?:\/\/",caseSensitive: false), "");
+      urlLauncher.canLaunch(_newhref).then((_canLaunch) {
+        if(_canLaunch){
+          urlLauncher.launch(_newhref);
+        }
+      });
+    }
+    else if(_phoneExp.hasMatch(_link)){
+      String _newphone= "tel:$_link";
+      urlLauncher.canLaunch(_newphone).then((_canLaunch) {
+        if(_canLaunch){
+          urlLauncher.launch(_newphone);
         }
       });
     }
   }
+
+  parseTextForLinks(String _textData){
+    _textData=_textData.replaceAll("\n", "__kjut__ ");
+    List<String> _brkPostText= _textData.split(" ");
+    int _brkPostTextCount= _brkPostText.length;
+    List<InlineSpan> _postTextSpan= List<InlineSpan>();
+    String _curPostText="";
+    for(int _j=0; _j<_brkPostTextCount; _j++){
+      String _curText=_brkPostText[_j];
+      if(_phoneExp.hasMatch(_curText) || _isEmail.hasMatch(_curText) || _htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
+        _postTextSpan.add(
+            TextSpan(
+                text: _curPostText.replaceAll("__kjut__ ", "\n") + " ",
+                style: TextStyle(
+                    height: 1.5
+                )
+            )
+        );
+        _curPostText="";
+        _postTextSpan.add(
+            TextSpan(
+                text: _curText.replaceAll("__kjut__ ", "\n") + " ",
+                style: TextStyle(
+                    color: (_isEmail.hasMatch(_curText)) ? Colors.orange :
+                    (_href.hasMatch(_curText) || _phoneExp.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey,
+                    height: 1.5
+                ),
+                recognizer: TapGestureRecognizer()..onTap=(){
+                  followLink(_curText);
+                }
+            )
+        );
+      }
+      else{
+        _curPostText += _curText.replaceAll("__kjut__ ", "\n") + " ";
+      }
+    }
+    _postTextSpan.add(
+        TextSpan(
+            text: _curPostText.replaceAll("__kjut__ ", "\n"),
+            style: TextStyle(
+                height: 1.5
+            )
+        )
+    );
+    return _postTextSpan;
+  }//parse text for links
 
   ///Adds or remove a post from bookmark list of wall posts
   Future bookmarkPost(String _postId)async{
@@ -428,21 +495,32 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             padding: EdgeInsets.only(left: 12, right: 12),
             child: Row(
               children: <Widget>[
-                Container(
-                  margin: EdgeInsets.only(right:9),
-                  child: dp.length == 1 ? 
-                  CircleAvatar(
-                    radius: _screenSize.width < 420 ? 15 : 20,
-                    child: Text(
-                      dp,
-                      style: TextStyle(
-                        color: Colors.white,
+                GestureDetector(
+                  onTap: (){
+                    Navigator.of(_pageContext).push(
+                      MaterialPageRoute(
+                        builder: (BuildContext _ctx){
+                          return WallProfile(wallObj[blockIndex]["user_id"], username: wallObj[blockIndex]["fullname"],);
+                        }
+                      )
+                    );
+                  },
+                  child: Container(
+                    margin: EdgeInsets.only(right:9),
+                    child: dp.length == 1 ?
+                    CircleAvatar(
+                      radius: _screenSize.width < 420 ? 15 : 20,
+                      child: Text(
+                        dp,
+                        style: TextStyle(
+                          color: Colors.white,
+                        ),
                       ),
+                    ):
+                    CircleAvatar(
+                      radius: _screenSize.width < 420 ? 15 : 20,
+                      backgroundImage: FileImage(File("$_postDir/$dp")),
                     ),
-                  ):
-                  CircleAvatar(
-                    radius: _screenSize.width < 420 ? 15 : 20,
-                    backgroundImage: FileImage(File("$_postDir/$dp")),
                   ),
                 ),//user dp
                 Expanded(
@@ -695,45 +773,12 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                   }
                   else showMorePost[postId]=true;
                 }
-                List<String> _brkPostText= _postText.split(" ");
-                int _brkPostTextCount= _brkPostText.length;
-                List<InlineSpan> _postTextSpan= List<InlineSpan>();
-                String _curPostText="";
-                for(int _j=0; _j<_brkPostTextCount; _j++){
-                  String _curText=_brkPostText[_j];
-                  if(_htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
-                    _postTextSpan.add(
-                        TextSpan(
-                          text: "$_curPostText ",
-                        )
-                    );
-                    _curPostText="";
-                    _postTextSpan.add(
-                        TextSpan(
-                            text: "$_curText ",
-                            style: TextStyle(
-                                color: (_href.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey
-                            ),
-                            recognizer: TapGestureRecognizer()..onTap=(){
-                              followLink(_curText);
-                            }
-                        )
-                    );
-                  }
-                  else{
-                    _curPostText += "$_curText ";
-                  }
-                }
-                _postTextSpan.add(
-                  TextSpan(
-                    text: _curPostText
-                  )
-                );
+                
                 return RichText(
                     text: TextSpan(
                         children: <TextSpan>[
                           TextSpan(
-                              children: _postTextSpan,
+                              children: parseTextForLinks(_postText),
                               recognizer: TapGestureRecognizer()..onTap=(){
                                 if(showMorePost[postId] == false){
                                   showMorePost[postId]=true;
@@ -819,7 +864,9 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                         hintStyle: TextStyle(
                           color: Colors.grey,
                           fontSize: _globalFontSize
-                        )
+                        ),
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none
                       ),
                     )
                   ),
@@ -1471,8 +1518,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         ),
       );
     }
-    
-    
 
     Database con= await dbTables.myProfileCon();
     var _result= await con.rawQuery("select * from user_profile where status='active'");
@@ -1510,6 +1555,33 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       con.execute("insert into user_profile (username, dp, website, brief, post_count, follower, following, website_title, website_description, status) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",[upname, profiledp, upwebsite, upbrief, uppostcount, upfollower, upfollowing, uprofileWebsiteTitle, uprofileWebsiteDescription, upStattus]);
     }
     dpChangedCtr.add("kjut");
+
+    Directory _postDir= Directory(_appdir.path + "/wall_dir"+ "/post_media");
+    await _postDir.create();
+    //clear old 'cached' data
+    int _kita= DateTime.now().millisecondsSinceEpoch;
+    int _expire= _kita - 3600000;
+    Database _con= await dbTables.wallPosts();
+    var _r=await _con.rawQuery("select * from wall_posts where section <> 'following' and cast(save_time as signed)<?", [_expire]);
+    int _kount= _r.length;
+    for(int _k=0; _k<_kount; _k++){
+      List _imgs= jsonDecode(_r[_k]["post_images"]);
+      int _imgCount=_imgs.length;
+      for(int _j; _j<_imgCount; _j++){
+        File _imgF= File(_postDir.path + "/${_imgs[_j]}");
+        _imgF.exists().then((_exists) {
+          if(_exists) _imgF.delete();
+        });
+      }
+
+      String _dp=_r[_k]["dp"];
+      int _id= _r[_k]["id"];
+      File _dpF= File(_postDir.path + "/$_dp");
+      _dpF.exists().then((_exists) {
+        if(_exists) _dpF.delete();
+      });
+      _con.execute("delete from wall_posts where id=?", [_id]);
+    }
   }//init local wall dir
 
   Size _screenSize;

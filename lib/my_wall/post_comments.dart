@@ -275,6 +275,7 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
                                         _replyToName=_cuname;
                                         _replyToId=_cid;
                                         _replyToCtr.add(_replyToName);
+                                        FocusScope.of(_pageContext).requestFocus(_commentTxtNode);
                                       },
                                       child: Container(
                                         margin: EdgeInsets.only(right:7),
@@ -460,19 +461,36 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
   RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);
   RegExp _href= RegExp(r"[a-z0-9-]+\.[a-z0-9-]+", caseSensitive: false);
   RegExp _atTag= RegExp(r"^@[a-z0-9_]+$", caseSensitive: false);
+  RegExp _isEmail= RegExp(r"^[a-z_0-9.-]+\@[a-z0-9-]+\.[a-z0-9-]+(\.[a-z0-9-]+)*$", caseSensitive: false);
+  RegExp _phoneExp= RegExp(r"^[0-9 -]+$");
 
   ///Tries to open a URL or a local link (an app link)
   followLink(String _link){
-    if(_href.hasMatch(_link)){
-      urlLauncher.canLaunch(_link).then((_canLaunch) {
+    if(_isEmail.hasMatch(_link)){
+      urlLauncher.canLaunch("mailto:$_link").then((_canLaunch) {
         if(_canLaunch){
-          urlLauncher.launch(_link);
+          urlLauncher.launch("mailto:$_link");
+        }
+      });
+    }
+    else if(_href.hasMatch(_link)){
+      String _newhref= "https://" + _link.replaceAll(RegExp(r"^https?:\/\/",caseSensitive: false), "");
+      urlLauncher.canLaunch(_newhref).then((_canLaunch) {
+        if(_canLaunch){
+          urlLauncher.launch(_newhref);
+        }
+      });
+    }
+    else if(_phoneExp.hasMatch(_link)){
+      String _newphone= "tel:$_link";
+      urlLauncher.canLaunch(_newphone).then((_canLaunch) {
+        if(_canLaunch){
+          urlLauncher.launch(_newphone);
         }
       });
     }
   }
 
-  ///Processes a text and extracts supported links
   parseTextForLinks(String _textData){
     _textData=_textData.replaceAll("\n", "__kjut__ ");
     List<String> _brkPostText= _textData.split(" ");
@@ -481,13 +499,13 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
     String _curPostText="";
     for(int _j=0; _j<_brkPostTextCount; _j++){
       String _curText=_brkPostText[_j];
-      if(_htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
+      if(_phoneExp.hasMatch(_curText) || _isEmail.hasMatch(_curText) || _htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
         _postTextSpan.add(
             TextSpan(
-              text: _curPostText.replaceAll("__kjut__ ", "\n") + " ",
-              style: TextStyle(
-                height: 1.5
-              )
+                text: _curPostText.replaceAll("__kjut__ ", "\n") + " ",
+                style: TextStyle(
+                    height: 1.5
+                )
             )
         );
         _curPostText="";
@@ -495,8 +513,9 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
             TextSpan(
                 text: _curText.replaceAll("__kjut__ ", "\n") + " ",
                 style: TextStyle(
-                    color: (_href.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey,
-                  height: 1.5
+                    color: (_isEmail.hasMatch(_curText)) ? Colors.orange :
+                    (_href.hasMatch(_curText) || _phoneExp.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey,
+                    height: 1.5
                 ),
                 recognizer: TapGestureRecognizer()..onTap=(){
                   followLink(_curText);
@@ -510,10 +529,10 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
     }
     _postTextSpan.add(
         TextSpan(
-          text: _curPostText.replaceAll("__kjut__ ", "\n"),
-          style: TextStyle(
-            height: 1.5
-          )
+            text: _curPostText.replaceAll("__kjut__ ", "\n"),
+            style: TextStyle(
+                height: 1.5
+            )
         )
     );
     return _postTextSpan;
@@ -703,6 +722,7 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
                             _replyToName=_cuname;
                             _replyToId=_cid;
                             _replyToCtr.add(_replyToName);
+                            FocusScope.of(_pageContext).requestFocus(_commentTxtNode);
                           },
                           child: Container(
                             margin: EdgeInsets.only(left:9),
@@ -1092,6 +1112,7 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
                                     color: Colors.black,
                                   ),
                                   controller: _commentTextCtr,
+                                  focusNode: _commentTxtNode,
                                   decoration: InputDecoration(
                                       hintText: "Comment as " + globals.fullname,
                                       hintStyle: TextStyle(
@@ -1134,6 +1155,7 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
   }//page body method
 
   TextEditingController _commentTextCtr= TextEditingController();
+  FocusNode _commentTxtNode=FocusNode();
   StreamController _replyToCtr= StreamController.broadcast();
   String _replyToName="";
   String _replyToId="";
