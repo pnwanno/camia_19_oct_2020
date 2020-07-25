@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui';
 
@@ -8,8 +9,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_icons/flutter_icons.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart' as urlLauncher;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:video_player/video_player.dart';
 
 import '../globals.dart' as globals;
+import "../dbs.dart";
 
 class WallProfile extends StatefulWidget{
   _WallProfile createState(){
@@ -33,6 +38,72 @@ class _WallProfile extends State<WallProfile>{
     if(counter>-1) return remain.toStringAsFixed(1) + units[counter];
     return "$val";
   }//convert to k m or b
+
+  Future followUnfollowUser()async{
+    int _isFollowing=_ufollowers.indexOf(globals.userId);
+    if(_isFollowing>-1){
+      _ufollowers.removeAt(_isFollowing);
+    }
+    else{
+      _ufollowers.add(globals.userId);
+    }
+    _followingNotifier.add("kjut");
+    String _reqId=widget.userId;
+    try{
+      http.post(
+          globals.globBaseUrl + "?process_as=follow_unfollow_wall_user",
+          body: {
+            "user_id": globals.userId,
+            "req_id": _reqId
+          }
+      ).then((_resp)async{
+        if(_resp.statusCode == 200){
+          Directory _followingDp= Directory(_wallDir.path + "/following");
+          await _followingDp.create();
+
+          Database _con= await _dbTables.wallPosts();
+          var _respObj= jsonDecode(_resp.body);
+          var _r= await _con.rawQuery("select * from followers where user_id=?", [_reqId]);
+          if(_respObj["status"] == "following"){
+            if(_r.length <1){
+              String _username=_respObj["username"];
+              String _dp= _respObj["dp"];
+              List<String> _brkDp= _dp.split("/");
+              String _dpName=_brkDp.last;
+              _con.execute("insert into followers (user_id, user_name, dp) values (?, ?, ?)", [_reqId, _username, _dpName]);
+              http.readBytes(_dp).then((_byteData){
+                File _dpF= File(_followingDp.path + "/$_dpName");
+                _dpF.exists().then((_exists) {
+                  if(!_exists){
+                    _dpF.writeAsBytes(_byteData);
+                  }
+                });
+              });
+            }
+          }
+          else if(_respObj["status"] == "unfollowing"){
+            if(_r.length>0){
+              String _dp= _r[0]["dp"];
+              int _fid=_r[0]["id"];
+              File _dpF= File(_followingDp.path + "/$_dp");
+              _dpF.exists().then((_exists){
+                if(_exists){
+                  _dpF.delete();
+                }
+              });
+              _con.execute("delete from followers where id=?", [_fid]);
+            }
+          }
+        }
+      });
+    }
+    catch(ex){
+      _kjToast.showToast(
+          text: "Offline mode",
+          duration: Duration(seconds: 3)
+      );
+    }
+  }
 
   RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);
   RegExp _href= RegExp(r"[a-z0-9-]+\.[a-z0-9-]+", caseSensitive: false);
@@ -244,22 +315,34 @@ class _WallProfile extends State<WallProfile>{
     );
   }//profile shadow
 
+  List _ufollowers;
+  List _ufollowing;
+  List _umutual;
+  StreamController _followingNotifier= StreamController.broadcast();
+
+  var _userAbout;
   Future fetchWallProfile()async{
     try{
-      String _url= globals.globBaseUrl + "?process_as=fetch_user_wall_profile";
-      http.Response _resp= await http.post(
-        _url,
-        body: {
-          "user_id": globals.userId,
-          "req_id" : widget.userId
+      if(_userAbout==null){
+        String _url= globals.globBaseUrl + "?process_as=fetch_user_wall_profile";
+        http.Response _resp= await http.post(
+            _url,
+            body: {
+              "user_id": globals.userId,
+              "req_id" : widget.userId
+            }
+        );
+        if(_resp.statusCode == 200){
+          _userAbout=jsonDecode(_resp.body);
         }
-      );
-      if(_resp.statusCode == 200){
-        var _respObj= jsonDecode(_resp.body);
+      }
+      if(_userAbout!=null){
+        var _respObj= _userAbout;
         _localUsername=_respObj["username"];
-        _kjToast= globals.KjToast(12.0, _screenSize, _toastCtr, _screenSize.height * .4);
-        _pageLoadNotifier.add("kjut");
-        List _ufollowers= _respObj["r_follower"];
+        _ufollowers= _respObj["r_follower"];
+        _ufollowing=_respObj["r_following"];
+        _umutual= _respObj["mutual"];
+
         return Container(
           child: Column(
             children: <Widget>[
@@ -321,7 +404,17 @@ class _WallProfile extends State<WallProfile>{
                               ),
                             ),//fullname
 
-                            Container(
+                            _respObj["about"] == "" 
+                                ?Container(
+                              margin: EdgeInsets.only(top:12),
+                              width: _screenSize.width * .7,
+                              height: 48,
+                              decoration: BoxDecoration(
+                                color: globals.wallContainerShadow,
+                                borderRadius: BorderRadius.circular(7)
+                              ),
+                            ) 
+                            :Container(
                               margin: EdgeInsets.only(top:12),
                               padding:EdgeInsets.only(top:7, bottom: 7, left:12, right: 12),
                               decoration: BoxDecoration(
@@ -347,68 +440,75 @@ class _WallProfile extends State<WallProfile>{
                               ),
                             ),//website
 
-                            Container(
-                              margin: EdgeInsets.only(top:12),
-                              child: Material(
-                               color: Colors.transparent,
-                                child: InkResponse(
-                                  onTap: (){
-
-                                  },
-                                  child: _ufollowers.indexOf(globals.userId) > -1?
-                                  Container(
-                                    padding: EdgeInsets.only(left:12, right:12, top:7, bottom:7),
-                                    decoration: BoxDecoration(
-                                      color: Colors.orange,
-                                      borderRadius: BorderRadius.circular(12)
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: <Widget>[
-                                        Icon(
-                                          FlutterIcons.account_arrow_left_mco,
-                                          color: Colors.white,
-                                        ),
-                                        Container(
-                                          child: Text(
-                                              "Unfollow",
-                                            style: TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 12
-                                            ),
+                            widget.userId == globals.userId
+                                ? Container() :
+                            StreamBuilder(
+                              stream: _followingNotifier.stream,
+                              builder: (BuildContext _ctx, AsyncSnapshot snapshot){
+                                return Container(
+                                  margin: EdgeInsets.only(top:12),
+                                  child: Material(
+                                    color: Colors.transparent,
+                                    child: InkResponse(
+                                      onTap: (){
+                                        followUnfollowUser();
+                                      },
+                                      child: _ufollowers.indexOf(globals.userId)>-1?
+                                      Container(
+                                          padding: EdgeInsets.only(left:12, right:12, top:7, bottom:7),
+                                          decoration: BoxDecoration(
+                                              color: Colors.orange,
+                                              borderRadius: BorderRadius.circular(12)
                                           ),
-                                        )
-                                      ],
-                                    )
-                                  ):
-                                  Container(
-                                      padding: EdgeInsets.only(left:12, right:12, top:7, bottom:7),
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: Color.fromRGBO(22, 22, 22, 1)
-                                    ),
-                                      child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: <Widget>[
-                                          Icon(
-                                              FlutterIcons.account_arrow_right_mco,
-                                            color: Colors.white,
-                                          ),
-                                          Container(
-                                            margin: EdgeInsets.only(left: 7),
-                                            child: Text(
-                                                "Follow",
-                                              style: TextStyle(
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: <Widget>[
+                                              Icon(
+                                                FlutterIcons.account_arrow_left_mco,
                                                 color: Colors.white,
-                                                fontSize: 12
                                               ),
-                                            ),
+                                              Container(
+                                                child: Text(
+                                                  "Unfollow",
+                                                  style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12
+                                                  ),
+                                                ),
+                                              )
+                                            ],
                                           )
-                                        ],
-                                      )
+                                      ):
+                                      Container(
+                                          padding: EdgeInsets.only(left:12, right:12, top:7, bottom:7),
+                                          decoration: BoxDecoration(
+                                              borderRadius: BorderRadius.circular(12),
+                                              color: Color.fromRGBO(22, 22, 22, 1)
+                                          ),
+                                          child: Row(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            children: <Widget>[
+                                              Icon(
+                                                FlutterIcons.account_arrow_right_mco,
+                                                color: Colors.white,
+                                              ),
+                                              Container(
+                                                margin: EdgeInsets.only(left: 7),
+                                                child: Text(
+                                                  "Follow",
+                                                  style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontSize: 12
+                                                  ),
+                                                ),
+                                              )
+                                            ],
+                                          )
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              ),
+                                );
+                              },
                             ), //follow unfollow button
                           ],
                         ),
@@ -420,55 +520,120 @@ class _WallProfile extends State<WallProfile>{
 
               Container(
                 margin: EdgeInsets.only(top: 32),
-                padding: EdgeInsets.only(left:16, right: 16, top:24, bottom: 24),
+                padding: EdgeInsets.only(left:16, right: 16, top:20, bottom: 20),
                 decoration: BoxDecoration(
-                  color: Color.fromRGBO(12, 12, 12, 1),
-                  boxShadow: [
-                    BoxShadow(
-
-                    )
-                  ]
+                  color: Color.fromRGBO(80, 80, 80, 1),
+                  borderRadius: BorderRadius.circular(7)
                 ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: <Widget>[
-                    Material(
-                      color: Colors.transparent,
-                      child: InkResponse(
-                        onTap: (){
+                    StreamBuilder(
+                      stream: _followingNotifier.stream,
+                      builder: (BuildContext _ctx, AsyncSnapshot snapshot){
+                        return Material(
+                          color: Colors.transparent,
+                          child: InkResponse(
+                            onTap: (){
 
-                        },
-                        child: Container(
-                          padding: EdgeInsets.only(left: 7, right: 7, top: 7, bottom: 7),
-                          decoration:BoxDecoration(
-                              color: Color.fromRGBO(1, 1, 1, 1),
-                              borderRadius: BorderRadius.circular(7)
-                          ),
-                          child: Column(
-                            children: <Widget>[
-                              Container(
-                                margin: EdgeInsets.only(bottom: 3),
-                                child: Text(
-                                  "Followers",
-                                  style: TextStyle(
-                                      fontSize: 8,
-                                      color: Colors.white
-                                  ),
-                                ),
+                            },
+                            child: Container(
+                              padding: EdgeInsets.only(left: 7, right: 7, top: 7, bottom: 7),
+                              decoration:BoxDecoration(
+                                  color: Colors.orange,
+                                  borderRadius: BorderRadius.circular(5),
                               ),
-                              Container(
-                                child: Text(
-                                  convertToK(_ufollowers.length),
-                                  style: TextStyle(
-                                      color: Colors.grey,
-                                      fontFamily: "ubuntu"
+                              child: Column(
+                                children: <Widget>[
+                                  Container(
+                                    margin: EdgeInsets.only(bottom: 3),
+                                    child: Text(
+                                      "Followers",
+                                      style: TextStyle(
+                                          fontSize: 8,
+                                          color: Colors.black,
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              )
-                            ],
+                                  Container(
+                                    child: Text(
+                                      convertToK(_ufollowers.length),
+                                      style: TextStyle(
+                                          color: Colors.white,
+                                          fontFamily: "ubuntu"
+                                      ),
+                                    ),
+                                  )
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
+                        );
+                      },
                     ),//followers
+
+                    Container(
+                      padding: EdgeInsets.only(left: 7, right: 7, top: 7, bottom: 7),
+                      decoration:BoxDecoration(
+                        color: Colors.blue,
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          Container(
+                            margin: EdgeInsets.only(bottom: 3),
+                            child: Text(
+                              "Following",
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: Colors.black,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            child: Text(
+                              convertToK(_ufollowing.length),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: "ubuntu"
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    ),//following
+
+                    (widget.userId == globals.userId) ? Container()
+                        :Container(
+                      padding: EdgeInsets.only(left: 7, right: 7, top: 7, bottom: 7),
+                      decoration:BoxDecoration(
+                        color: Color.fromRGBO(10, 10, 10, 1),
+                        borderRadius: BorderRadius.circular(5),
+                      ),
+                      child: Column(
+                        children: <Widget>[
+                          Container(
+                            margin: EdgeInsets.only(bottom: 3),
+                            child: Text(
+                              "Mutual",
+                              style: TextStyle(
+                                fontSize: 8,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          Container(
+                            child: Text(
+                              convertToK(_umutual.length),
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: "ubuntu"
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    ),//mutual
                   ],
                 ),
               ), //column2 followers following mutual
@@ -477,86 +642,182 @@ class _WallProfile extends State<WallProfile>{
         );
       }
     }
-    catch(ex){debugPrint("kjut error $ex");
-      _localUsername= (widget.username==null) ? "" : widget.username;
-      _kjToast= globals.KjToast(12.0, _screenSize, _toastCtr, _screenSize.height * .4);
-      _pageLoadNotifier.add("kjut");
+    catch(ex){
     }
-  }
+  }//fetch wAll profile
 
-  int _globListItemCount=2;
+  Map<String, VideoPlayerController> _postVideos= Map<String, VideoPlayerController>();
+  Widget profileBlock(int _itemIndex){
+     Map _liBlock=_pageLiBlocks[_itemIndex];
+    String _postId= _liBlock["post_id"];
+    if(_wallBlockKeys.containsKey(_postId)){
+      _wallBlockKeys[_postId]= GlobalKey();
+    }
+    String _mediaroot=_pageLiBlocks[_itemIndex]["image_path"];
+    List _postmedia=_pageLiBlocks[_itemIndex]["images"];
+    int _postmediacount= _postmedia.length;
+    List _brkAR= _postmedia[0]["ar"].toString().split("/");
+    double _ar=double.tryParse(_brkAR[0])/double.tryParse(_brkAR[1]);
+    List<Widget> _pvChildren= List<Widget>();
+    for(int _k=0; _k<_postmediacount; _k++){
+      if(_postmedia[_k]["type"] == "image"){
+        _pvChildren.add(
+          Container(
+            child: Stack(
+              children: <Widget>[
+                Container(
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: NetworkImage(_mediaroot + "/" + _postmedia[_k]["file"]),
+                      fit: BoxFit.fitWidth,
+                      alignment: Alignment.topCenter
+                    )
+                  ),
+                )
+              ],
+            ),
+          )
+        );
+      }
+      else{
+        String _videoId= "$_postId.$_k";
+        if(!_postVideos.containsKey(_videoId)){
+          _postVideos[_videoId]= VideoPlayerController.network("$_mediaroot/${_postmedia[_k]}");
+          _postVideos[_videoId].initialize().then((value){
+            _postVideos[_videoId].setVolume(0.0);
+            _postVideos[_videoId].seekTo(Duration(milliseconds: 500));
+          });
+        }
+        List _innerARBrk=_postmedia[_k]["ar"].toString().split("/");
+        double _innerAr= double.tryParse(_innerARBrk[0])/double.tryParse(_innerARBrk[1]);
+        _pvChildren.add(
+          Container(
+            child: Stack(
+              children: <Widget>[
+                Container(
+                  alignment: Alignment.center,
+                  child: AspectRatio(
+                    aspectRatio: _innerAr,
+                    child: VideoPlayer(
+                        _postVideos[_videoId]
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 12, bottom: 12,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkResponse(
+                        onTap: (){
+
+                        },
+                        child: Icon(
+                          FlutterIcons.ios_volume_mute_ion
+                        ),
+                      ),
+                    )
+                )
+              ],
+            ),
+          )
+        );
+      }
+    }
+    return Container(
+      margin: EdgeInsets.only(bottom: 16),
+      key: _wallBlockKeys[_postId],
+      child: Column(
+        children: <Widget>[
+          Container(
+            width: _screenSize.width,
+            height:_screenSize.width * (1/_ar),
+            child: PageView(
+              children: _pvChildren,
+            )
+          )
+        ],
+      ),
+    );
+  }//profile block
+  
+  List _pageLiBlocks= List();
+  StreamController _pageLiUpdater= StreamController.broadcast();
+  final Map<String, GlobalKey> _wallBlockKeys= Map<String, GlobalKey>();
+  Map<String, StreamController> pvHeightNotifier= Map<String, StreamController>();
   Widget pageBody(){
+    if (_kjToast == null){
+      _kjToast= globals.KjToast(12.0, _screenSize, _toastCtr, _screenSize.height * .4);
+    }
     return Container(
       padding: EdgeInsets.only(top:32, left: 12, right: 12),
       child: Stack(
         children: <Widget>[
           Container(
             child: kjPullToRefresh(
-                child: ListView.builder(
-                  controller: _globalListCtr,
-                  itemCount: _globListItemCount,
-                    itemBuilder: (BuildContext _ctx, int _itemIndex){
-                      if(_itemIndex == 0){
-                        return Container(
-                          child: Column(
-                            children: <Widget>[
-                              pullToRefreshContainer(),
-                              FutureBuilder(
-                                future: fetchWallProfile(),
-                                builder: (BuildContext __ctx, AsyncSnapshot snapshot){
-                                  if(snapshot.hasData){
-                                    return snapshot.data;
-                                  }
-                                  else{
-                                    Future.delayed(
-                                      Duration(milliseconds: 1000),
-                                        (){
-                                        _profileShimmerCtr.add({
-                                          "state": "play",
-                                          "position": 0.0
-                                        });
-                                        }
-                                    );
-                                    return profileShadow(
-                                      shimmer: kShimmer(
-                                          _profileShimmerCtr,
-                                          _screenSize.width, 120,
-                                          LinearGradient(
-                                            colors: [
-                                              Colors.transparent,
-                                              Color.fromRGBO(70, 70, 70, .7),
-                                              Colors.transparent,
-                                              Colors.transparent,
-                                            ],
-                                            begin: Alignment.topLeft,
-                                            end: Alignment.bottomRight,
-                                            tileMode: TileMode.repeated
-                                          )
-                                      )
-                                    );
-                                  }
-                                },
-                              )
-                            ],
-                          ),
-                        );
-                      }
-                      else{
-                        return Container();
-                      }
-                    }
+                child: StreamBuilder(
+                  stream: _pageLiUpdater.stream,
+                  builder: (BuildContext _ctx, snapshot){
+                    return ListView.builder(
+                        controller: _globalListCtr,
+                        itemCount: _pageLiBlocks.length,
+                        itemBuilder: (BuildContext _ctx, int _itemIndex){
+                          if(_itemIndex == 0){
+                            return Container(
+                              child: Column(
+                                children: <Widget>[
+                                  pullToRefreshContainer(),
+                                  FutureBuilder(
+                                    future: fetchWallProfile(),
+                                    builder: (BuildContext __ctx, AsyncSnapshot snapshot){
+                                      if(snapshot.hasData){
+                                        return snapshot.data;
+                                      }
+                                      else{
+                                        Future.delayed(
+                                            Duration(milliseconds: 1000),
+                                                (){
+                                              _profileShimmerCtr.add({
+                                                "state": "play",
+                                                "position": 0.0
+                                              });
+                                            }
+                                        );
+                                        return profileShadow(
+                                            shimmer: kShimmer(
+                                                _profileShimmerCtr,
+                                                _screenSize.width, 120,
+                                                LinearGradient(
+                                                    colors: [
+                                                      Colors.transparent,
+                                                      Color.fromRGBO(70, 70, 70, .7),
+                                                      Colors.transparent,
+                                                      Colors.transparent,
+                                                    ],
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                    tileMode: TileMode.repeated
+                                                )
+                                            )
+                                        );
+                                      }
+                                    },
+                                  ),
+                                  
+                                  profileBlock(_itemIndex)
+                                ],
+                              ),
+                            );
+                          }
+                          else{
+                            return profileBlock(_itemIndex);
+                          }
+                        }
+                    );
+                  },
                 )
             ),
           ),
-          StreamBuilder(
-            stream: _pageLoadNotifier.stream,
-            builder: (BuildContext _ctx, snapshot){
-              if(snapshot.hasData){
-                return _kjToast;
-              }
-              else return Container();
-            },
-          )
+          _kjToast
         ],
       ),
     );
@@ -564,10 +825,52 @@ class _WallProfile extends State<WallProfile>{
 
   globals.KjToast _kjToast;
   StreamController _toastCtr= StreamController.broadcast();
+
+  DBTables _dbTables= DBTables();
   @override
   void initState() {
     super.initState();
+    getPageContents();
+    localInit();
   }//route's init method
+
+  Directory _appDir;
+  Directory _wallDir;
+  localInit()async{
+    _appDir= await getApplicationDocumentsDirectory();
+    _wallDir= Directory(_appDir.path + "/wall_dir");
+    await _wallDir.create();
+    if(widget.username == null){
+      _localUsername="";
+    }
+    else _localUsername= widget.username;
+    _pageLoadNotifier.add("kjut");
+  }//local Init
+
+
+  Future getPageContents()async{
+    try{
+      http.Response _resp= await http.post(
+          globals.globBaseUrl + "?process_as=fetch_user_wall_post",
+          body: {
+            "user_id" : globals.userId,
+            "req_id" : widget.userId,
+            "start" : _pageLiBlocks.length.toString()
+          }
+      );
+      if(_resp.statusCode == 200){
+        var _respObj= jsonDecode(_resp.body);
+        _pageLiBlocks.addAll(_respObj);
+        _pageLiUpdater.add("kjut");
+      }
+    }
+    catch(ex){
+      _kjToast.showToast(
+        text: "Can request for posts in offline mode",
+        duration: Duration(seconds: 3)
+      );
+    }
+  }
 
   BuildContext _pageContext;
   Size _screenSize;
@@ -606,6 +909,7 @@ class _WallProfile extends State<WallProfile>{
     pullRefreshCtr.close();
     _profileShimmerCtr.close();
     _toastCtr.close();
+    _pageLiUpdater.close();
   }//route's dispose method
 
   ///This is the container placed as the first child of the listview

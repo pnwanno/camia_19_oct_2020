@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter_icons/flutter_icons.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/material.dart';
@@ -66,6 +67,7 @@ class _WallPostLikers extends State<WallPostLikers>{
           var _r= await _con.rawQuery("select * from followers where user_id=?", [_userId]);
           if(_respObj["status"] == "following"){
             if(_r.length <1){
+              _con.execute("update wall_posts set section='following' where user_id='$_userId' and section='unfollowing'");
               String _username=_respObj["username"];
               String _dp= _respObj["dp"];
               List<String> _brkDp= _dp.split("/");
@@ -92,6 +94,7 @@ class _WallPostLikers extends State<WallPostLikers>{
                 }
               });
               _con.execute("delete from followers where id=?", [_fid]);
+              _con.execute("update wall_posts set section='unfollowing' where user_id='$_userId' and section='following'");
             }
           }
         }
@@ -217,7 +220,7 @@ class _WallPostLikers extends State<WallPostLikers>{
                             child: Container(
                               padding: EdgeInsets.only(left:9, right: 9, top: 3, bottom: 3),
                               decoration: BoxDecoration(
-                                  color: _following[_userId] ? Color.fromRGBO(60, 32, 32, 1) : Color.fromRGBO(32, 32, 32, 1),
+                                  color: _following[_userId] ? Colors.orange : Color.fromRGBO(32, 32, 32, 1),
                                   borderRadius: BorderRadius.circular(12)
                               ),
                               child: _following[_userId] ?
@@ -293,41 +296,86 @@ class _WallPostLikers extends State<WallPostLikers>{
         if(_snapshot.hasData){
           return _snapshot.data;
         }
-        else return Container(
-          padding: EdgeInsets.only(left:12, right:12, top: 3, bottom: 3),
-          margin: EdgeInsets.only(bottom: 3, right: 12),
-          decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: Color.fromRGBO(32, 32, 32, 1)
-              )
-            )
-          ),
-          child: Row(
-            children: <Widget>[
-              Container(
-                margin: EdgeInsets.only(right:12),
-                child: CircleAvatar(
-                  radius: 20,
-                  child: Text("?"),
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  child: Text(
-                    "...",
-                    style: TextStyle(
-                      color: Colors.grey
-                    ),
-                  ),
-                ),
-              )
-            ],
-          ),
-        );
+        else return blockShadow();
       },
     );
   }//a block in the like list
+
+  Widget blockShadow(){
+    return Container(
+      padding: EdgeInsets.only(left:12, right:12, top: 3, bottom: 3),
+      margin: EdgeInsets.only(bottom: 3, right: 12),
+      decoration: BoxDecoration(
+          border: Border(
+              bottom: BorderSide(
+                  color: Color.fromRGBO(32, 32, 32, 1)
+              )
+          )
+      ),
+      child: Row(
+        children: <Widget>[
+          Container(
+            margin: EdgeInsets.only(right:12),
+            child: CircleAvatar(
+              radius: 20,
+              child: Text("?"),
+            ),
+          ),
+          Expanded(
+            child: Container(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Container(
+                    margin: EdgeInsets.only(bottom: 5),
+                    width: _screenSize.width * .3,
+                    height: 12,
+                    decoration: BoxDecoration(
+                        color: Color.fromRGBO(32, 32, 32, 1),
+                        borderRadius: BorderRadius.circular(7)
+                    ),
+                  ),
+                  Container(
+                    margin: EdgeInsets.only(bottom: 5),
+                    width: _screenSize.width * .5,
+                    height: 12,
+                    decoration: BoxDecoration(
+                        color: Color.fromRGBO(32, 32, 32, 1),
+                        borderRadius: BorderRadius.circular(7)
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+          Container(
+            child: Column(
+              children: <Widget>[
+                Container(
+                  margin: EdgeInsets.only(bottom: 3),
+                  width: 70,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: Color.fromRGBO(32, 32, 32, 1),
+                    borderRadius: BorderRadius.circular(5)
+                  ),
+                ),
+                Container(
+                  margin: EdgeInsets.only(bottom: 3),
+                  width: 70,
+                  height: 20,
+                  decoration: BoxDecoration(
+                      color: Color.fromRGBO(32, 32, 32, 1),
+                      borderRadius: BorderRadius.circular(5)
+                  ),
+                )
+              ],
+            ),
+          )
+        ],
+      ),
+    );
+  }
 
   pageBody(){
     return Container(

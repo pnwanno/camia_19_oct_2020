@@ -6,6 +6,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_icons/flutter_icons.dart';
 import 'package:path_provider/path_provider.dart';
@@ -59,6 +60,9 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   
   likeUnlikePost(String postId)async{
     try{
+      Database _con= await dbTables.wallPosts();
+      String _likeJson= jsonEncode(wallLikes[postId]);
+      _con.execute("update wall_posts set likes=? where post_id=?", [_likeJson, postId]);
       String url=globals.globBaseUrl + "?process_as=like_wall_post";
       http.post(
         url,
@@ -235,6 +239,63 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     }
   }//fetch posts
 
+  Future<Widget> fetchTrendingHashTags()async{
+    try{
+      http.Response _resp=await http.post(
+          globals.globBaseUrl + "?process_as=fetch_wall_trending_tags"
+      );
+      if(_resp.statusCode == 200){
+        Map _respObj= jsonDecode(_resp.body);
+        List<Widget> _liChildren= List<Widget>();
+        int _kounter=0;
+        _respObj.forEach((key, value) {
+          if(_kounter<20){
+            _liChildren.add(
+                Material(
+                  color: Colors.transparent,
+                  child: InkResponse(
+                    onTap: (){
+
+                    },
+                    child: Container(
+                      margin: EdgeInsets.only(right: 12),
+                      padding: EdgeInsets.only(left:16, right: 16, top: 5, bottom: 5),
+                      decoration: BoxDecoration(
+                        color: Color.fromRGBO(225, 225, 225, 1),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(
+                          color: Colors.grey
+                        )
+                      ),
+                      child: Text(
+                        key,
+                        style: TextStyle(
+                          fontFamily: "sail"
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+            );
+          }
+          _kounter++;
+        });
+
+        return ListView(
+          reverse: true,
+          physics: BouncingScrollPhysics(),
+          scrollDirection: Axis.horizontal,
+          children: _liChildren,
+        );
+      }
+      else return Container();
+    }
+    catch(ex){
+      return Container(
+
+      );
+    }
+  }
 
   Widget _wallBlocks;
   double pullRefreshHeight=0;
@@ -333,7 +394,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   Map<String, VideoPlayerController> wallVideoCtr= Map<String, VideoPlayerController>();
   StreamController _vidVolCtrl= StreamController.broadcast();
   bool _globalMute=true;
-  Map<String, bool> wallLikes=Map<String, bool>();
+  Map<String, List> wallLikes=Map<String, List>();
   StreamController wallLikeCtr= StreamController.broadcast();
   Map<String, bool> showMorePost=Map<String, bool>();
   StreamController showMorePostCtr= StreamController.broadcast();
@@ -372,10 +433,11 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     List postMedia= jsonDecode(wallObj[blockIndex]["post_images"]);
     List<Widget> pvChildren= List<Widget>();
     int mediaCount= postMedia.length;
-    double _mediaAR= double.tryParse(postMedia[0]["ar"]);
+    List<String> _brkAR= postMedia[0]["ar"].toString().split("/");
+    double _mediaAR= double.tryParse(_brkAR[0]) / double.tryParse(_brkAR[1]);
     double pvHeight= _screenSize.width * (1/_mediaAR);
     for(int k=0; k<mediaCount; k++){
-      String targMediaName=postMedia[k]["name"];
+      String targMediaName=postMedia[k]["file"];
       List<String> brkMediaName= targMediaName.split(".");
       String mediaExt= brkMediaName.last;
       if(imageExts.indexOf(mediaExt)>-1){
@@ -388,7 +450,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                   width:_screenSize.width,
                   decoration: BoxDecoration(
                     image: DecorationImage(
-                      image: FileImage(File(_postDir + "/" + postMedia[k]["name"])),
+                      image: FileImage(File(_postDir + "/" + postMedia[k]["file"])),
                       fit: BoxFit.fitWidth,
                       alignment: Alignment.topLeft
                     )
@@ -402,13 +464,16 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
       else{
         String _tmpPlayerKey="$postId.$k";
         if(!wallVideoCtr.containsKey("$_tmpPlayerKey")) {
-          wallVideoCtr["$_tmpPlayerKey"] = VideoPlayerController.file(File(_postDir + "/" + postMedia[k]["name"]));
+          wallVideoCtr["$_tmpPlayerKey"] = VideoPlayerController.file(File(_postDir + "/" + postMedia[k]["file"]));
           wallVideoCtr["$_tmpPlayerKey"].initialize().then((value) {
             wallVideoCtr["$_tmpPlayerKey"].setVolume(0);
             wallVideoCtr["$_tmpPlayerKey"].seekTo(Duration(milliseconds: 500));
             wallVideoCtr["$_tmpPlayerKey"].setLooping(true);
           });
         }
+        List<String> _brkVAR= postMedia[k]["ar"].toString().split("/");
+        double _mediaVAR= double.tryParse(_brkVAR[0]) / double.tryParse(_brkVAR[1]);
+
         pvChildren.add(
            Container(
              width: _screenSize.width,
@@ -418,7 +483,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                     height: double.infinity,
                     alignment: Alignment.center,
                     child: AspectRatio(
-                    aspectRatio: double.tryParse(postMedia[k]["ar"]),
+                    aspectRatio: _mediaVAR,
                     child: VideoPlayer(
                         wallVideoCtr["$_tmpPlayerKey"]
                       ),
@@ -464,8 +529,10 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     }
     String dp=wallObj[blockIndex]["dp"];
 
-    List wallLikers= jsonDecode(wallObj[blockIndex]["likes"]);
-    wallLikes["$postId"]= wallLikers.indexOf(globals.userId)>-1;
+
+    if(!wallLikes.containsKey(postId)){
+      wallLikes["$postId"]=jsonDecode(wallObj[blockIndex]["likes"]);
+    }
 
     _wallBooked["$postId"]= wallObj[blockIndex]["book_marked"];
 
@@ -594,11 +661,17 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                             color: Colors.transparent,
                             child: InkResponse(
                               onTap: (){
-                                wallLikes["$postId"] = !(wallLikes["$postId"]);
-                                wallLikeCtr.add("kjut");
+                                int _ilike=wallLikes[postId].indexOf(globals.userId);
+                                if(_ilike>-1){
+                                  wallLikes[postId].removeAt(_ilike);
+                                }
+                                else{
+                                  wallLikes[postId].add(globals.userId);
+                                }
                                 likeUnlikePost(postId);
+                                wallLikeCtr.add("kjut");
                               },
-                              child: wallLikes["$postId"] ? 
+                              child: wallLikes[postId].indexOf(globals.userId)>-1 ?
                                 ScaleTransition(
                                   scale: _likeAni,
                                   child: Icon(
@@ -738,12 +811,17 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                           )
                         );
                       },
-                      child: Text(
-                        wallLikers.length==1 ? "1 like" : convertToK(wallLikers.length) + " likes",
-                        style: TextStyle(
-                          color: Colors.white
-                        ),
-                      ),
+                      child: StreamBuilder(
+                        stream: wallLikeCtr.stream,
+                        builder: (BuildContext _ctx, AsyncSnapshot snapshot){
+                          return Text(
+                            wallLikes[postId].length==1 ? "1 like" : convertToK(wallLikes[postId].length) + " likes",
+                            style: TextStyle(
+                                color: Colors.white
+                            ),
+                          );
+                        },
+                      )
                     ),
                   ),
                 )
@@ -1021,7 +1099,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         }
       );
       if(_resp.statusCode == 200){
-        RegExp _vidFExp= RegExp(r"\.mp4$", caseSensitive: false);
         //let's get existing posts
         Database _con= await dbTables.wallPosts();
         var _result= await _con.rawQuery("select post_id from wall_posts where status='complete' and section='following'");
@@ -1052,7 +1129,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
               var _checkPostImages=jsonDecode(_checkPostResult[0]["post_images"]);
               int _checkPostImagesCount= _checkPostImages.length;
               for(int _j=0; _j<_checkPostImagesCount; _j++){
-                String _checkPostImagePath= _postDir.path + "/" + _checkPostImages[_j]["name"];
+                String _checkPostImagePath= _postDir.path + "/" + _checkPostImages[_j]["file"];
                 File _checkPostImageFile=File(_checkPostImagePath);
                 _checkPostImageFile.exists().then((_fexists){
                   if(_fexists){
@@ -1061,7 +1138,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                 });
               }
               await _con.execute("delete from wall_posts where post_id='$_targPID'");
-              return;
             }//the post was not fully processed for some reasons
 
             //check if this post have been saved before but not as 'following' post
@@ -1069,28 +1145,10 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             if(_checkPostExistsDifferently.length == 1) continue;
 
 
-            List<Map<String, String>> _postImages= List<Map<String, String>>();
             var _serverPImages= _respObj[_k]["images"];
             int _imageCount= _serverPImages.length;
-            for(int _j=0; _j<_imageCount; _j++){
-              String _localAR= "auto";
-              if(_j == 0){
-                String _firstMediaAR=_respObj[_k]["ar"];
-                if(_firstMediaAR=="auto"){
-                  _localAR="auto";
-                }
-                else{
-                  List<String> _brkServerMediaAR= _firstMediaAR.split("/");
-                  double _calcMediaAR= double.tryParse(_brkServerMediaAR[0]) / double.tryParse(_brkServerMediaAR[1]);
-                  _localAR= _calcMediaAR.toString();
-                }
-              }
-              _postImages.add({
-                "name": _serverPImages[_j],
-                "ar": _localAR
-              });
-            }
-            String _jsonPostImages= jsonEncode(_postImages);
+
+            String _jsonPostImages= jsonEncode(_respObj[_k]["images"]);
 
             String _kita= DateTime.now().millisecondsSinceEpoch.toString();
             String _section="following";
@@ -1106,6 +1164,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             String _mediaServerLoc= _respObj[_k]["image_path"];
             String _postDP=_respObj[_k]["dp"];
             if(_postDP.length>1){
+              //A dp length greater than 1 is a link to an actual image in the server
               String _postDPURL="$_postDP";
               List<String> _brkPostDP= _postDP.split("/");
               _postDP= _kita + _brkPostDP.last;
@@ -1122,12 +1181,12 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
             //delete the oldest post if local post count reaches the set threshold
             var _locResult= await _con.rawQuery("select id from wall_posts");
             if(_locResult.length >=_kount){
-              var _oldestPostResult= await _con.rawQuery("select * from wall_posts where book_marked='no' order by post_id asc limit 1");
+              var _oldestPostResult= await _con.rawQuery("select * from wall_posts where book_marked='no' order by cast(post_id as signed) asc limit 1");
               if(_oldestPostResult.length == 1){
                   var _oldestPostImages=jsonDecode(_oldestPostResult[0]["post_images"]);
                   int _oldestPostImageCount= _oldestPostImages.length;
                   for(int _u=0; _u<_oldestPostImageCount; _u++){
-                    File _oldestPostImage = File(_postDir.path + "/" + _oldestPostImages[_u]["name"]);
+                    File _oldestPostImage = File(_postDir.path + "/" + _oldestPostImages[_u]["file"]);
                     _oldestPostImage.exists().then((value) {
                       if(value) _oldestPostImage.delete();
                     });
@@ -1142,76 +1201,32 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
               }
             }
 
-            //now fetch post media
+            //now fetch post media from the server for local savings
             for(int _j=0; _j<_imageCount; _j++){
               try{
-                String _imageURL=_serverImageDir + "/" + _serverPImages[_j];
+                String _imageURL=_serverImageDir + "/" + _serverPImages[_j]["file"];
                 http.get(_imageURL).then((_resp){
-                  Uint8List _imageBytes=_resp.bodyBytes;
-                  File _localImage= File(_postDir.path + "/" + _serverPImages[_j]);
-                  _localImage.writeAsBytes(_imageBytes).then((_imageByteFile)async{
-                    List<String> _brkImageName= _serverPImages[_j].toString().split(".");
-                    if(videoExts.indexOf(_brkImageName.last) >-1){
-                      VideoPlayerController _tmpVidCtr= VideoPlayerController.file(_imageByteFile);
-                      _tmpVidCtr.initialize().then((value) async {
-                        double _tmpvidAR= _tmpVidCtr.value.aspectRatio;
-                        _tmpVidCtr.dispose();
-                        var _innerTmpResult= await _con.rawQuery("select post_images from wall_posts where post_id='$_targPID'");
-                        if(_innerTmpResult.length==1){
-                          List _innerTmpMedia= jsonDecode(_innerTmpResult[0]["post_images"]);
-                          int _countInnerTmpMedia= _innerTmpMedia.length;
-                          for(int _t=0; _t<_countInnerTmpMedia; _t++){
-                            if(_innerTmpMedia[_t]["name"] == _serverPImages[_j]){
-                              _innerTmpMedia[_t]["ar"]= _tmpvidAR.toString();
-                              String _innerMediaJson= jsonEncode(_innerTmpMedia);
-                              bool _allVidsAR= true;
-                              for(int _i=0; _i<_countInnerTmpMedia; _i++){
-                                if(_vidFExp.hasMatch(_innerTmpMedia[_i]["name"])){
-                                  if(_innerTmpMedia[_i]["ar"] == "auto"){
-                                    _allVidsAR=false;
-                                  }
-                                }
-                                if(File(_postDir.path + "/" + _innerTmpMedia[_i]["name"]).existsSync() == false){
-                                  _allVidsAR=false;
-                                }
-                              }
-                              if(_allVidsAR){
-                                String _newInnerStatus="complete";
-                                await _con.execute("update wall_posts set post_images=?, status=? where post_id=?", [_innerMediaJson, _newInnerStatus,  _targPID]);
+                  if(_resp.statusCode == 200){
+                    Uint8List _imageBytes=_resp.bodyBytes;
+                    File _localImage= File(_postDir.path + "/" + _serverPImages[_j]["file"]);
+                    _localImage.writeAsBytes(_imageBytes).then((_imageByteFile)async{
+                      bool _uploadedAll= true;
+                      for(int _u=0; _u<_imageCount; _u++){
+                        File _checkFile= File(_postDir.path + "/" + _serverPImages[_u]["file"]);
+                        _checkFile.exists().then((_fexists){
+                          if(!_fexists) _uploadedAll=false;
+                          if(_u==_imageCount - 1){
+                            if(_uploadedAll){
+                              String _newInnerStatus="complete";
+                              _con.execute("update wall_posts set status=? where post_id=?", [_newInnerStatus,  _targPID]).then((value){
                                 fetchPosts();
-                              }
-                              else _con.execute("update wall_posts set post_images=? where post_id=?", [_innerMediaJson, _targPID]);
-                              break;
+                              });
                             }
                           }
-                        }
-                      });
-                    }
-                    else{
-                      //then an image have been written successfully
-                      var _innerTmpResult= await _con.rawQuery("select post_images from wall_posts where post_id='$_targPID'");
-                      bool _allVidsAR= true;
-                      if(_innerTmpResult.length==1){
-                        List _innerTmpMedia= jsonDecode(_innerTmpResult[0]["post_images"]);
-                        int _countInnerTmpMedia= _innerTmpMedia.length;
-                        for(int _t=0; _t<_countInnerTmpMedia; _t++){
-                          if(_vidFExp.hasMatch(_innerTmpMedia[_t]["name"])){
-                            if(_innerTmpMedia[_t]["ar"] == "auto"){
-                              _allVidsAR=false;
-                            }
-                          }
-                          if(File(_postDir.path + "/" + _innerTmpMedia[_t]["name"]).existsSync() == false){
-                            _allVidsAR=false;
-                          }
-                        }
+                        });
                       }
-                      if(_allVidsAR){
-                        String _newInnerStatus="complete";
-                        await _con.execute("update wall_posts set status=? where post_id=?", [_newInnerStatus,  _targPID]);
-                        fetchPosts();
-                      }
-                    }
-                  });
+                    });
+                  }
                 });
               }
               catch(ex){
@@ -1249,6 +1264,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     return Scaffold(
       bottomNavigationBar:
         Container(
+          height: 70,
           padding: (_screenSize.width < 365) ? EdgeInsets.only(left: 22, right: 22) : EdgeInsets.only(left: 32, right: 32),
           decoration: BoxDecoration(
             color: Color.fromRGBO(26, 26, 26, 1)
@@ -1374,7 +1390,41 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                   }
                 ),
               ),//the page's actual content
-
+              Positioned(
+                left: 0,top: 5,width: _screenSize.width,
+                height:50,
+                child: StreamBuilder(
+                  stream: _hashTagPosCtr.stream,
+                  builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+                    return Stack(
+                      children: <Widget>[
+                        AnimatedPositioned(
+                          left: 0, top: _hashTagsTopPos,
+                          width: _screenSize.width, height:50,
+                          child: Container(
+                            alignment: Alignment.centerLeft,
+                            width: _screenSize.width,
+                            child: FutureBuilder(
+                              future: fetchTrendingHashTags(),
+                              builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+                                if(_snapshot.hasData){
+                                  return _snapshot.data;
+                                }
+                                else {
+                                  return Container(
+                                  );
+                                }
+                              },
+                            ),
+                          ),
+                          duration: Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                        )
+                      ],
+                    );
+                  },
+                ),
+              ),
               StreamBuilder(
                 stream: _pageLoadedNotifier.stream,
                 builder: (BuildContext ctx, AsyncSnapshot snapshot){
@@ -1407,6 +1457,10 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     });
   }
 
+  double _hashTagsTopPos=0;
+  StreamController _hashTagPosCtr= StreamController.broadcast();
+  bool _hashtagisdown=false;
+
   StreamController _pageLoadedNotifier= StreamController.broadcast();
   final Map<String, GlobalKey> _wallBlockKeys= Map<String, GlobalKey>();
   AnimationController _likeAniCtr;
@@ -1416,6 +1470,21 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     super.initState();
     wallScrollCtr= ScrollController();
     wallScrollCtr.addListener(() {
+      if(wallScrollCtr.position.userScrollDirection == ScrollDirection.forward){
+        _hashTagsTopPos=0;
+        _hashtagisdown=false;
+      }
+      else{
+        if(_hashtagisdown==false){
+          _hashTagsTopPos -=1;
+          if(_hashTagsTopPos<-70){
+            _hashTagsTopPos=0;
+            _hashtagisdown=true;
+          }
+        }
+      }
+      _hashTagPosCtr.add("kjut");
+
       List<String> _currentlyVisible=List<String>();
       _wallBlockKeys.forEach((key, value) {
         if(value.currentContext!=null){
@@ -1619,6 +1688,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     showMorePostCtr.close();
     _wallBookedCtr.close();
     _vidVolCtrl.close();
+    _hashTagPosCtr.close();
   }//close all stream
 
   @override

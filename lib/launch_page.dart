@@ -3,11 +3,15 @@ import 'dart:ui';
 import 'package:sqflite/sqflite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:circular_clip_route/circular_clip_route.dart';
 
 import './globals.dart' as globals;
 import './dbs.dart';
 
 import './my_wall/index.dart';
+import './camtv/index.dart';
+import './magazine/index.dart';
+
 class LaunchPage extends StatefulWidget{
   _LaunchPage createState(){
     return _LaunchPage();
@@ -68,6 +72,9 @@ class _LaunchPage extends State<LaunchPage>{
     );
   }//select icon function
 
+  final _wallKey= GlobalKey();
+  final _cmtvKey= GlobalKey();
+  final _citimagKey= GlobalKey();
   int buttonAniDur=300;
   Widget pageBody(){
     return Stack(
@@ -139,6 +146,7 @@ class _LaunchPage extends State<LaunchPage>{
                   ),
                   children: <Widget>[
                     AnimatedContainer(
+                      key:_wallKey,
                       duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 0 ? EdgeInsets.all(5) : EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -154,7 +162,8 @@ class _LaunchPage extends State<LaunchPage>{
                               Duration(milliseconds: (buttonAniDur * 2) + 50),
                               (){
                                 Navigator.of(_pageContext).push(
-                                  MaterialPageRoute(
+                                  CircularClipRoute(
+                                    expandFrom: _wallKey.currentContext,
                                     builder: (BuildContext ctx){
                                       return MyWall();
                                     } 
@@ -179,6 +188,7 @@ class _LaunchPage extends State<LaunchPage>{
 
 
                     AnimatedContainer(
+                      key: _cmtvKey,
                       padding: selectedIcon == 1 ? EdgeInsets.all(5) : EdgeInsets.all(12),
                       duration: Duration(milliseconds: buttonAniDur),
                       decoration: BoxDecoration(
@@ -190,6 +200,19 @@ class _LaunchPage extends State<LaunchPage>{
                         child: InkResponse(
                           onTap: (){
                             selectIcon(1);
+                            Future.delayed(
+                                Duration(milliseconds: (buttonAniDur * 2) + 50),
+                                    (){
+                                  Navigator.of(_pageContext).push(
+                                      CircularClipRoute(
+                                        expandFrom: _cmtvKey.currentContext,
+                                          builder: (BuildContext ctx){
+                                            return CamTV();
+                                          }
+                                      )
+                                  );
+                                }
+                            );
                           },
                           child: Container(
                             width: 80, height: 80,
@@ -426,6 +449,7 @@ class _LaunchPage extends State<LaunchPage>{
 
 
                     AnimatedContainer(
+                      key: _citimagKey,
                         duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 10 ? EdgeInsets.all(5) : EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -437,6 +461,19 @@ class _LaunchPage extends State<LaunchPage>{
                         child: InkResponse(
                           onTap: (){
                             selectIcon(10);
+                            Future.delayed(
+                                Duration(milliseconds: (buttonAniDur * 2) + 50),
+                                    (){
+                                  Navigator.of(_pageContext).push(
+                                      CircularClipRoute(
+                                          expandFrom: _citimagKey.currentContext,
+                                          builder: (BuildContext ctx){
+                                            return CitiMag();
+                                          }
+                                      )
+                                  );
+                                }
+                            );
                           },
                           child: Container(
                             width: 80, height: 80,

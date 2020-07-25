@@ -1202,7 +1202,9 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
                                   decoration: BoxDecoration(
                                       image: DecorationImage(
                                           image: FileImage(_selectedFiles[k]),
-                                          fit: BoxFit.cover)),
+                                          //fit: BoxFit.cover
+                                      )
+                                  ),
                                 ))),
                       ],
                     ),
@@ -1597,7 +1599,9 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
                   //send cropped data
                   b64Str= base64Encode(finalImageData["$targFid"]["file"]);
                 }
-                await tryPostFile(b64Str, postId, inFName, "image");
+                List<String> _b64Arr= List<String>();
+                _b64Arr.add(b64Str);
+                await tryPostFile(_b64Arr, postId, inFName, "image");
               }
               else if(_selFilePPT[k]["type"] == AssetType.video){
                 //cut the video based on user selected if it exists or automatically cut the first 30 seconds
@@ -1619,8 +1623,18 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
                   if(execResult == 0){
                     File tmpF= File(outPath);
                     if(await tmpF.exists()){
+                      List<String> _b64Arr=List();
                       b64Str= base64Encode(tmpF.readAsBytesSync());
-                      await tryPostFile(b64Str, postId, inFName, "video");
+                      _b64Arr.add(b64Str);
+                      //create video poster
+                      String _posterPath=outPath.replaceFirst(".mp4", ".jpg");
+                      int _posterResult=await _fffmpeg.execute("-i $inPath  -ss 00:00:01 -vframes 1 $_posterPath");
+                      if(_posterResult == 0){
+                        File _tmpF=File(_posterPath);
+                        _b64Arr.add(base64Encode(_tmpF.readAsBytesSync()));
+                        _tmpF.delete();
+                      }
+                      await tryPostFile(_b64Arr, postId, inFName, "video");
                       tmpF.delete();
                     }
                     else{
@@ -1651,8 +1665,18 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
                   if(execResult == 0){
                     File tmpF= File(outPath);
                     if(await tmpF.exists()){
-                      b64Str= base64Encode(tmpF.readAsBytesSync());
-                      await tryPostFile(b64Str, postId, inFName, "video");
+                      List<String> _b64Arr=List<String>();
+                      _b64Arr.add(base64Encode(tmpF.readAsBytesSync()));
+
+                      //create video poster
+                      String _posterPath=outPath.replaceFirst(".mp4", ".jpg");
+                      int _posterResult=await _fffmpeg.execute("-i $inPath  -ss 00:00:01 -vframes 1 $_posterPath");
+                      if(_posterResult == 0){
+                        File _tmpF=File(_posterPath);
+                        _b64Arr.add(base64Encode(_tmpF.readAsBytesSync()));
+                        _tmpF.delete();
+                      }
+                      await tryPostFile(_b64Arr, postId, inFName, "video");
                       tmpF.delete();
                     }
                     else{
@@ -1688,7 +1712,7 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
   } //try post
 
   ///Posts the processed file data to the server
-  Future tryPostFile(String b64, String formId, String fname, String ftype)async{
+  Future tryPostFile(List b64, String formId, String fname, String ftype)async{
     try{
       postingCount++;
       double pcent= (uploadedCount/finalSelectionCount) * 100;
@@ -1699,12 +1723,14 @@ class _NewWallPostDlg extends State<NewWallPostDlg>
         "loading_desc": "Posting $fname ($postingCount of $finalSelectionCount)"
       });
       String postUrl= globals.globBaseUrl + "?process_as=upload_wall_post_file";
+      String _jsonStr=jsonEncode(b64);
+
       http.Response resp= await http.post(
         postUrl,
         body: {
           "user_id": globals.userId,
           "post_id": formId,
-          "file": b64,
+          "file": _jsonStr,
           "position": "$uploadedCount",
           "total": "$finalSelectionCount",
           "ftype": ftype

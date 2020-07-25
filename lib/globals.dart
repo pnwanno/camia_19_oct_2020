@@ -10,8 +10,31 @@ String fullname="";
 String phone="";
 String dp="";
 String userId="";
+Color wallContainerShadow= Color.fromRGBO(32, 32, 32, 1);
 
 String globBaseUrl="https://camia.blwcampusministry.com/app-engine/front-api.php";
+String globBaseUrl2="https://camia.blwcampusministry.com/app-engine/front-api2.php";
+
+Path logoPath(Size size){
+  Path path=Path();
+  path.lineTo(size.width * 0.27, size.height);
+  path.cubicTo(size.width * 0.23, size.height * 0.98, size.width * 0.17, size.height * 0.92, size.width * 0.15, size.height * 0.88);
+  path.cubicTo(size.width * 0.13, size.height * 0.82, size.width * 0.12, size.height * 0.75, size.width * 0.14, size.height * 0.66);
+  path.cubicTo(size.width * 0.16, size.height * 0.53, size.width * 0.16, size.height * 0.49, size.width * 0.09, size.height * 0.38);
+  path.cubicTo(size.width * 0.02, size.height * 0.26, size.width * 0.01, size.height * 0.24, size.width * 0.02, size.height * 0.18);
+  path.cubicTo(size.width * 0.02, size.height * 0.11, size.width * 0.05, size.height * 0.07, size.width * 0.11, size.height * 0.03);
+  path.cubicTo(size.width * 0.18, -0.02, size.width * 0.27, -0.01, size.width * 0.41, size.height * 0.08);
+  path.cubicTo(size.width * 0.52, size.height * 0.14, size.width * 0.63, size.height * 0.18, size.width * 0.73, size.height * 0.19);
+  path.cubicTo(size.width * 0.85, size.height / 5, size.width * 0.88, size.height * 0.22, size.width * 0.93, size.height * 0.26);
+  path.cubicTo(size.width * 0.98, size.height * 0.3, size.width * 1.02, size.height * 0.37, size.width * 1.02, size.height * 0.46);
+  path.cubicTo(size.width * 1.02, size.height * 0.61, size.width * 0.92, size.height * 0.72, size.width * 0.75, size.height * 0.76);
+  path.cubicTo(size.width * 0.65, size.height * 0.79, size.width * 0.61, size.height * 0.81, size.width * 0.55, size.height * 0.89);
+  path.cubicTo(size.width * 0.47, size.height * 0.97, size.width * 0.42, size.height, size.width * 0.35, size.height);
+  path.cubicTo(size.width * 0.32, size.height, size.width * 0.28, size.height, size.width * 0.27, size.height);
+  path.cubicTo(size.width * 0.27, size.height, size.width * 0.27, size.height, size.width * 0.27, size.height);
+  path.close();
+  return path;
+}
 
 class KjToast extends StatelessWidget{
   KjToast(this._globalFontSize, this._screenSize, this._toastCtrl, this._bottomPosition);

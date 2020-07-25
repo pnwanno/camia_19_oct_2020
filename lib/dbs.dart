@@ -43,4 +43,30 @@ class DBTables{
     );
     return con;
   }
+
+  Future<Database> tvProfile()async{
+    String dbLoc=await getDatabasesPath();
+    String dbPath= join(dbLoc, "kjut_camtv_profile.db");
+    Database con= await openDatabase(
+        dbPath,
+        version: 1,
+        onCreate: (db, verse){
+          db.execute("create table profile (id integer primary key, channel_name text, dp text, website text, brief text, status text, channel_id text)");
+        }
+    );
+    return con;
+  }
+
+  Future<Database> citiMag()async{
+    String dbLoc=await getDatabasesPath();
+    String dbPath= join(dbLoc, "kjut_citi_mag.db");
+    Database con= await openDatabase(
+        dbPath,
+        version: 1,
+        onCreate: (db, verse){
+          db.execute("create table magazines (id integer primary key, title text, about text, period text, bookmarked text, mag_id text, pages text, status text)");
+        }
+    );
+    return con;
+  }
 }
