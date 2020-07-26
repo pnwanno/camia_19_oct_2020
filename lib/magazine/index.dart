@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_icons/flutter_icons.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:liquid_progress_indicator/liquid_progress_indicator.dart';
@@ -12,6 +13,7 @@ import 'package:http/http.dart' as http;
 
 import '../globals.dart' as globals;
 import '../dbs.dart';
+import './readMagazine.dart';
 
 class CitiMag extends StatefulWidget{
   _CitiMag createState(){
@@ -45,7 +47,7 @@ class _CitiMag extends State<CitiMag>{
   List _globalPageData;
   fetchLocal({bool refresh})async{
     Database _con= await _dbTables.citiMag();
-    var _result= await _con.rawQuery("select * from magazines where status='complete' order by id desc");
+    var _result= await _con.rawQuery("select * from magazines where status='complete' order by id asc");
     if(_result.length>0){
       _globalPageData=_result;
       _pageBusyOpacity=0;
@@ -102,12 +104,13 @@ class _CitiMag extends State<CitiMag>{
             }
 
             String _bookmarked="no"; String _magid=_serverObj[_k]["id"];
-            String _curStatus='pending';
-            _con.execute("insert into magazines (title, about, period, bookmarked, mag_id, pages, status) values (?, ?, ?, ?, ?, ?, ?)", [_serverObj[_k]["title"], _serverObj[_k]["about"], _serverObj[_k]["period"], _bookmarked, _magid,_serverObj[_k]["pages"], _curStatus]).then((value){
+            String _ar=_serverObj[_k]["ar"];
+            String _curStatus='pending'; String _coverPageServerPath=_serverObj[_k]["cover_page"];
+            _con.execute("insert into magazines (title, about, period, bookmarked, mag_id, pages, status, page_path, ar) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", [_serverObj[_k]["title"], _serverObj[_k]["about"], _serverObj[_k]["period"], _bookmarked, _magid,_serverObj[_k]["pages"], _curStatus, _coverPageServerPath, _ar]).then((value){
               File _coverPageFile= File(_coverPages.path + "/$_magid.jpg");
               _coverPageFile.exists().then((_fexist) {
                 if(!_fexist){
-                  http.readBytes(_serverObj[_k]["cover_page"]).then((Uint8List _fbyte){
+                  http.readBytes(_coverPageServerPath).then((Uint8List _fbyte){
                     _coverPageFile.writeAsBytes(_fbyte).then((value){
                       _con.execute("update magazines set status='complete' where mag_id='$_magid'").then((value){
                         fetchLocal(refresh: false);
@@ -129,6 +132,28 @@ class _CitiMag extends State<CitiMag>{
     }
   }
 
+  animateToPage({String magId, String magTitle}){
+    _pageBusyOpacity=1;
+    _pageBusyCtr.add("kjut");
+    _pageBusyFloatingCtr.add("kjut");
+    Future.delayed(
+        Duration(seconds: 3),
+        (){
+          _pageBusyOpacity=0;
+          _pageBusyCtr.add("kjut");
+          _pageBusyFloatingCtr.add("kjut");
+          Navigator.of(_pageContext).push(
+            CupertinoPageRoute(
+              builder: (BuildContext _ctx){
+                return ReadMagazine(magId, magTitle);
+              }
+            )
+          );
+        }
+    );
+  }
+
+  int _clickedMag=-1;
   double _pageBusyOpacity=1;
   double _pageBusyAnimationEndVal=0;
   double _pageBusyAmount=.5;
@@ -145,32 +170,77 @@ class _CitiMag extends State<CitiMag>{
                 builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
                   if(_snapshot.hasData){
                     return Container(
-                      padding: EdgeInsets.only(left:12, right:12, top: 32),
+                      padding: EdgeInsets.only(left:12, right:12, top: 16),
                       child: GridView.builder(
                         itemCount: _globalPageData.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: (_screenSize.width > 700) ? 4 : 3
+                          gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                            maxCrossAxisExtent: _gridWidth,
+                            childAspectRatio: .67,
+                            mainAxisSpacing:7,
+                            crossAxisSpacing: _gridSpacing
                           ),
                           itemBuilder: (BuildContext __ctx, int _itemIndex){
                             return GestureDetector(
                               onTap: (){
-
+                                _clickedMag=_itemIndex;
+                                _magItemTapNotifier.add("kjut");
+                                animateToPage(magId: _globalPageData[_itemIndex]["mag_id"], magTitle: _globalPageData[_itemIndex]["title"]);
                               },
-                              child: Container(
-                                child: Column(
-                                  children: <Widget>[
-                                    Container(
-                                      width: 200, height: 205,
-                                      decoration: BoxDecoration(
-                                          image: DecorationImage(
-                                              image: FileImage(File(_coverPages.path + "/" + _globalPageData[_itemIndex]["mag_id"] + ".jpg")),
-                                              fit: BoxFit.cover,
-                                              alignment: Alignment.topCenter
-                                          )
-                                      ),
-                                    )
-                                  ],
-                                ),
+                              child: StreamBuilder(
+                                stream: _magItemTapNotifier.stream,
+                                builder: (BuildContext _strCtx, AsyncSnapshot _strSnapshot){
+                                  return TweenAnimationBuilder(
+                                    tween: Tween<double>(
+                                        begin: 5, end: (_clickedMag == _itemIndex) ? 0 : 5
+                                    ),
+                                    duration: Duration(milliseconds: 1000),
+                                    curve: Curves.easeInOut,
+                                    onEnd: (){
+                                      _clickedMag=-1;
+                                    },
+                                    builder: (BuildContext _twCtx, double _twVal, _){
+                                      return AnimatedContainer(
+                                        duration: Duration(milliseconds: 400),
+                                        padding: (_clickedMag == _itemIndex)? EdgeInsets.only(left: _twVal, right: _twVal, top: _twVal/2, bottom: _twVal/2) : EdgeInsets.only(left: 0),
+                                        decoration: BoxDecoration(
+                                            boxShadow: [
+                                              BoxShadow(
+                                                  offset: Offset(1, 1),
+                                                  color: Color.fromRGBO(10, 10, 10, .2),
+                                                  blurRadius: 4,spreadRadius: 2
+                                              )
+                                            ]
+                                        ),
+                                        alignment: Alignment.center,
+                                        child: Stack(
+                                          overflow: Overflow.visible,
+                                          children: <Widget>[
+                                            Container(
+                                              width:_gridWidth, height: (_gridWidth * (1/double.tryParse(_globalPageData[_itemIndex]["ar"]))),
+                                              decoration: BoxDecoration(
+                                                  image: DecorationImage(
+                                                      image: FileImage(File(_coverPages.path + "/" + _globalPageData[_itemIndex]["mag_id"] + ".jpg")),
+                                                      fit: BoxFit.fill,
+                                                      alignment: Alignment.topCenter
+                                                  )
+                                              ),
+                                            ),
+                                            Positioned(
+                                              right: 0, bottom: -10,
+                                              child: Container(
+                                                child: Icon(
+                                                    FlutterIcons.bookmark_ent,
+                                                  color: _globalPageData[_itemIndex]["bookmarked"] =="yes"? Colors.deepOrange : Colors.transparent,
+                                                  size: 28,
+                                                ),
+                                              ),
+                                            )
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
                               ),
                             );
                           }
@@ -185,7 +255,7 @@ class _CitiMag extends State<CitiMag>{
             ),
             _kjToast,
             Positioned(
-              bottom: _screenSize.height * .4, left: 0,
+              bottom: _screenSize.height * .25, left: 0,
               child: IgnorePointer(
                 ignoring: true,
                 child: StreamBuilder(
@@ -207,7 +277,7 @@ class _CitiMag extends State<CitiMag>{
                             tween: Tween<double>(
                                 begin: -12, end: _pageBusyAnimationEndVal
                             ),
-                            duration: Duration(seconds: 1),
+                            duration: Duration(milliseconds: 500),
                             curve: Curves.easeInOut,
                             builder: (BuildContext ___ctx, double _curVal, _){
                               return Container(
@@ -223,6 +293,7 @@ class _CitiMag extends State<CitiMag>{
                                         direction: Axis.vertical,
                                         shapePath: globals.logoPath(Size(120, 111)),
                                         value: _pageBusyAmount,
+                                        valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
                                       ),
                                     ),
                                     Positioned(
@@ -268,15 +339,25 @@ class _CitiMag extends State<CitiMag>{
 
   BuildContext _pageContext;
   Size _screenSize;
+  double _gridWidth; double _gridSpacing;
   @override
   Widget build(BuildContext context) {
     _pageContext= context;
     _screenSize= MediaQuery.of(_pageContext).size;
+    if(_screenSize.width>750){
+      _gridWidth= _screenSize.width/4.2;
+      _gridSpacing= (_screenSize.width/4) - (_screenSize.width/4.2);
+    }
+    else{
+      _gridWidth= _screenSize.width/2.2;
+      _gridSpacing= (_screenSize.width/2) - (_screenSize.width/2.2);
+    }
     if(_kjToast == null){
       _kjToast=globals.KjToast(12, _screenSize, _toastCtr, _screenSize.height * .4);
     }
     return WillPopScope(
       child: Scaffold(
+        backgroundColor: Color.fromRGBO(220, 220, 220, .8),
         appBar: AppBar(
           title: Container(
             child: Row(
@@ -314,6 +395,7 @@ class _CitiMag extends State<CitiMag>{
   StreamController _pageBusyCtr= StreamController.broadcast();
   StreamController _pageDataAvailableNotifier= StreamController.broadcast();
   StreamController _pageBusyFloatingCtr= StreamController.broadcast();
+  StreamController _magItemTapNotifier= StreamController.broadcast();
   @override
   void dispose() {
     super.dispose();
@@ -321,5 +403,6 @@ class _CitiMag extends State<CitiMag>{
     _pageBusyCtr.close();
     _pageBusyFloatingCtr.close();
     _pageDataAvailableNotifier.close();
+    _magItemTapNotifier.close();
   }//dispose
 }

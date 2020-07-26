@@ -64,7 +64,7 @@ class DBTables{
         dbPath,
         version: 1,
         onCreate: (db, verse){
-          db.execute("create table magazines (id integer primary key, title text, about text, period text, bookmarked text, mag_id text, pages text, status text)");
+          db.execute("create table magazines (id integer primary key, title text, about text, period text, bookmarked text, mag_id text, pages text, status text, page_path text, ar text)");
         }
     );
     return con;
