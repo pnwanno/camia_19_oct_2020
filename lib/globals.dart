@@ -15,6 +15,8 @@ Color wallContainerShadow= Color.fromRGBO(32, 32, 32, 1);
 String globBaseUrl="https://camia.blwcampusministry.com/app-engine/front-api.php";
 String globBaseUrl2="https://camia.blwcampusministry.com/app-engine/front-api2.php";
 
+StreamController globalCtr= StreamController.broadcast();
+
 Path logoPath(Size size){
   Path path=Path();
   path.lineTo(size.width * 0.27, size.height);

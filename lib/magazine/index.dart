@@ -26,6 +26,7 @@ class _CitiMag extends State<CitiMag>{
   Directory _appDir;
   Directory _magDir;
   Directory _coverPages;
+  Directory _innerPages;
   globals.KjToast _kjToast;
 
   @override
@@ -41,13 +42,15 @@ class _CitiMag extends State<CitiMag>{
     await _magDir.create();
     _coverPages= Directory(_magDir.path + "/cover_pages");
     await _coverPages.create();
+    _innerPages=Directory(_magDir.path + "/inner_pages");
+    await _innerPages.create();
     fetchLocal(refresh: true);
   }//init dir
 
   List _globalPageData;
   fetchLocal({bool refresh})async{
     Database _con= await _dbTables.citiMag();
-    var _result= await _con.rawQuery("select * from magazines where status='complete' order by id asc");
+    var _result= await _con.rawQuery("select * from magazines where status='complete' order by cast(time_str as signed) desc");
     if(_result.length>0){
       _globalPageData=_result;
       _pageBusyOpacity=0;
@@ -106,7 +109,8 @@ class _CitiMag extends State<CitiMag>{
             String _bookmarked="no"; String _magid=_serverObj[_k]["id"];
             String _ar=_serverObj[_k]["ar"];
             String _curStatus='pending'; String _coverPageServerPath=_serverObj[_k]["cover_page"];
-            _con.execute("insert into magazines (title, about, period, bookmarked, mag_id, pages, status, page_path, ar) values (?, ?, ?, ?, ?, ?, ?, ?, ?)", [_serverObj[_k]["title"], _serverObj[_k]["about"], _serverObj[_k]["period"], _bookmarked, _magid,_serverObj[_k]["pages"], _curStatus, _coverPageServerPath, _ar]).then((value){
+            String _timeStr=_serverObj[_k]["time_str"];
+            _con.execute("insert into magazines (title, about, period, bookmarked, mag_id, pages, status, page_path, ar, pages_dl, time_str) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", [_serverObj[_k]["title"], _serverObj[_k]["about"], _serverObj[_k]["period"], _bookmarked, _magid,_serverObj[_k]["pages"], _curStatus, _coverPageServerPath, _ar, _curStatus, _timeStr]).then((value){
               File _coverPageFile= File(_coverPages.path + "/$_magid.jpg");
               _coverPageFile.exists().then((_fexist) {
                 if(!_fexist){
@@ -132,22 +136,87 @@ class _CitiMag extends State<CitiMag>{
     }
   }
 
+  fetchMagazinePages(String _magId)async{
+    //let's fetch the inner pages of the magazine if they do not exist
+    Database _con= await _dbTables.citiMag();
+    var _result= await _con.rawQuery("select * from magazines where mag_id='$_magId'");
+    if(_result.length == 1){
+      String _allPagesDL=_result[0]["pages_dl"];
+      try{
+        if(_allPagesDL == "pending"){
+          int _pageLen=int.tryParse(_result[0]["pages"]);
+          String _serverPagePath= _result[0]["page_path"].toString();
+          List<String> _brkServerPagePath= _serverPagePath.split("/");
+          int _pathLen= _brkServerPagePath.length;
+          String _pageFolder= _brkServerPagePath[_pathLen - 2];
+          String _rootServerPath= _serverPagePath.replaceFirst("$_pageFolder/page1.jpg", "");
+          List<String> _savedPages= List<String>();
+          for(int _k=0; _k<_pageLen; _k++){
+            String _targPageStr="page${_k + 1}.jpg";
+            File _targPageF= File(_innerPages.path + "/$_pageFolder-$_targPageStr");
+            _targPageF.exists().then((bool _fexists){
+              if(_fexists){
+                _savedPages.add("$_pageFolder-$_targPageStr");
+                if(_savedPages.length == _pageLen){
+                  _con.execute("update magazines set status='complete' where mag_id='$_magId'");
+                }
+              }
+              else{
+                http.readBytes(
+                    _rootServerPath + "$_pageFolder/$_targPageStr"
+                ).then((_fetchedBytes){
+                  _targPageF.writeAsBytes(_fetchedBytes).then((value){
+                    _savedPages.add("$_pageFolder-$_targPageStr");
+                    if(_savedPages.length == _pageLen){
+                      _con.execute("update magazines set status='complete' where mag_id='$_magId'");
+                    }
+                    globals.globalCtr.add({"sender": "readmagazinefetchpages"});
+                  });
+                });
+              }
+            });
+          }
+        }
+      }
+      catch(ex){
+
+      }
+
+      try{
+        //register this magazine as read by the user
+        if(_allPagesDL == "pending"){
+          http.post(
+              globals.globBaseUrl2 + "?process_as=record_read_magazine",
+              body: {
+                "user_id": globals.userId,
+                "mag_id": _magId
+              }
+          );
+        }
+      }
+      catch(ex){
+
+      }
+    }
+  }
+
   animateToPage({String magId, String magTitle}){
+    fetchMagazinePages(magId);
     _pageBusyOpacity=1;
     _pageBusyCtr.add("kjut");
     _pageBusyFloatingCtr.add("kjut");
     Future.delayed(
         Duration(seconds: 3),
-        (){
+            (){
           _pageBusyOpacity=0;
           _pageBusyCtr.add("kjut");
           _pageBusyFloatingCtr.add("kjut");
           Navigator.of(_pageContext).push(
-            CupertinoPageRoute(
-              builder: (BuildContext _ctx){
-                return ReadMagazine(magId, magTitle);
-              }
-            )
+              CupertinoPageRoute(
+                  builder: (BuildContext _ctx){
+                    return ReadMagazine(magId, magTitle);
+                  }
+              )
           );
         }
     );
@@ -172,6 +241,7 @@ class _CitiMag extends State<CitiMag>{
                     return Container(
                       padding: EdgeInsets.only(left:12, right:12, top: 16),
                       child: GridView.builder(
+                        cacheExtent: _screenSize.height * 3,
                         itemCount: _globalPageData.length,
                           gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
                             maxCrossAxisExtent: _gridWidth,
@@ -334,6 +404,14 @@ class _CitiMag extends State<CitiMag>{
           ],
         ),
       ),
+      onFocusChange: (bool _isFocused){
+        if(_isFocused){
+          if(_pageBusyCtr.isClosed){
+            _pageBusyCtr= StreamController.broadcast();
+            _pageDataAvailableNotifier=StreamController.broadcast();
+          }
+        }
+      },
     );
   }//pagebody
 

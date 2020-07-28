@@ -64,7 +64,21 @@ class DBTables{
         dbPath,
         version: 1,
         onCreate: (db, verse){
-          db.execute("create table magazines (id integer primary key, title text, about text, period text, bookmarked text, mag_id text, pages text, status text, page_path text, ar text)");
+          db.execute("create table magazines (id integer primary key, title text, about text, period text, bookmarked text, mag_id text, pages text, status text, page_path text, ar text, pages_dl text, time_str text)");
+        }
+    );
+    return con;
+  }
+
+  Future<Database> lwDict()async{
+    String dbLoc=await getDatabasesPath();
+    String dbPath= join(dbLoc, "kjut_lwdict.db");
+    Database con= await openDatabase(
+        dbPath,
+        version: 1,
+        onCreate: (db, verse){
+          db.execute("create table dict_words (id integer primary key, title text, definition text, source_txt text, bookmarked text, word_id text)");
+          db.execute("create table day_word (id integer primary key, title text, definition text, source_txt text, word_id text, day text)");
         }
     );
     return con;

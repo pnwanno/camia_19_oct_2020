@@ -3,13 +3,17 @@ import 'dart:io';
 
 import 'package:camia/dbs.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_icons/flutter_icons.dart';
 import 'package:liquid_swipe/liquid_swipe.dart';
 import 'package:sqflite/sqflite.dart';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:liquid_progress_indicator/liquid_progress_indicator.dart';
+import 'package:circular_clip_route/circular_clip_route.dart';
 
 import '../globals.dart' as globals;
+import './comments.dart';
+
+
 class ReadMagazine extends StatefulWidget{
   _ReadMagazine createState(){
     return _ReadMagazine();
@@ -27,6 +31,46 @@ class _ReadMagazine extends State<ReadMagazine>{
     initDir();
   }//route's init state
 
+  StreamController _bookmarkNotifier= StreamController.broadcast();
+  bookUnbookMark()async{
+    Database _con= await _dbTables.citiMag();
+    String _magId=widget.magazineId;
+    var _result=await  _con.rawQuery("select * from magazines where mag_id='$_magId'");
+    if(_result.length==1){
+      if(_result[0]["bookmarked"] == "no"){
+        _con.execute("update magazines set bookmarked='yes' where mag_id='$_magId'");
+        _bookmarked=true;
+        _kjToast.showToast(
+          text: "Bookmarked",
+          duration: Duration(seconds: 2)
+        );
+      }
+      else{
+        _con.execute("update magazines set bookmarked='no' where mag_id='$_magId'");
+        _bookmarked=false;
+        _kjToast.showToast(
+            text: "Bookmark removed",
+            duration: Duration(seconds: 2)
+        );
+      }
+      _bookmarkNotifier.add("kjut");
+    }
+  }//book and unbookmark
+
+  bookmarg(){
+    String _magId=widget.magazineId;
+    _dbTables.citiMag().then((_con){
+      _con.execute("update magazines set bookmarked='yes' where mag_id='$_magId'");
+    });
+  }
+
+  unbookmarg(){
+    String _magId=widget.magazineId;
+    _dbTables.citiMag().then((_con){
+      _con.execute("update magazines set bookmarked='no' where mag_id='$_magId'");
+    });
+  }
+
   DBTables _dbTables=DBTables();
   Directory _appDir;
   Directory _magDir;
@@ -35,85 +79,68 @@ class _ReadMagazine extends State<ReadMagazine>{
     _appDir= await getApplicationDocumentsDirectory();
     _magDir= Directory(_appDir.path + "/magazine");
     _innerPages= Directory(_magDir.path + "/inner_pages");
-    await _innerPages.create();
     fetchPages();
   }//init dir
 
+  bool _bookmarked=false;
+  double _gmagAR=1.0;
+  int _magpageCount;
+  String _gpageFolder;
   fetchPages()async{
     try{
-      Database _con= await _dbTables.citiMag();
-      var _result= await _con.rawQuery("select * from magazines where mag_id=?", [widget.magazineId]);
-      if(_result.length==1){
-        int _pageLen=int.tryParse(_result[0]["pages"]);
-        String _serverPagePath= _result[0]["page_path"].toString();
-        double _magAR= double.tryParse(_result[0]["ar"]);
-        List<String> _brkServerPagePath= _serverPagePath.split("/");
-        int _pathLen= _brkServerPagePath.length;
-        String _pageFolder= _brkServerPagePath[_pathLen - 2];
-        String _rootServerPath= _serverPagePath.replaceFirst("$_pageFolder/page1.jpg", "");
-        for(int _k=0; _k<_pageLen; _k++) {
-          _magPages.add(Container());
-          String _targPageStr="page${_k + 1}.jpg";
-          File _tmpFile= File(_innerPages.path + "/$_pageFolder-$_targPageStr");
-          _tmpFile.exists().then((_fexists){
-            if(_fexists){
-              if(_magPages.length == 0){
-                _pageBusyOpacity=0;
-                _pageBusyCtr.add("kjut");
-              }
-              _magPages.insert(_k, Container(
-                width: _screenSize.width,
-                child: Container(
-                  height: _screenSize.width * (1/_magAR),
-                  width: _screenSize.width,
-                  decoration: BoxDecoration(
-                      image: DecorationImage(
-                          image: FileImage(_tmpFile),
-                          fit: BoxFit.fill,
-                          alignment: Alignment.topCenter
-                      )
-                  ),
-                ),
-              ));
-              _magPages.removeAt(_k+1);
-              _pageAvailableNotifier.add("kjut");
-            }
-            else{
-              http.readBytes(_rootServerPath + "$_pageFolder/$_targPageStr").then((_fetchedByte){
-                _tmpFile.writeAsBytes(_fetchedByte).then((value) {
-                  _magPages.insert(_k, Container(
-                    width: _screenSize.width,
-                    alignment: Alignment.center,
-                    child: Container(
-                      height: _screenSize.width * _magAR,
-                      width: _screenSize.width,
-                      decoration: BoxDecoration(
-                          image: DecorationImage(
-                              image: FileImage(_tmpFile),
-                              fit: BoxFit.fill,
-                              alignment: Alignment.topCenter
-                          )
-                      ),
-                    ),
-                  ));
-                  _magPages.removeAt(_k+1);
-                  _pageAvailableNotifier.add("kjut");
-                  if(_magPages.length == 0){
-                    _pageBusyOpacity=0;
-                    _pageBusyCtr.add("kjut");
-                  }
-                });
-              });
-            }
-          });
+      if(_magpageCount==null) {
+        Database _con = await _dbTables.citiMag();
+        var _result = await _con.rawQuery(
+            "select * from magazines where mag_id=?", [widget.magazineId]);
+        if (_result.length == 1) {
+          _gmagAR = double.tryParse(_result[0]["ar"]);
+          if (_result[0]["bookmarked"] == "yes") _bookmarked = true;
+          _bookmarkNotifier.add("kjut");
+
+          _magpageCount = int.tryParse(_result[0]["pages"]);
+          _globPageChangeNotifier.add("kjut");
+          String _serverPagePath = _result[0]["page_path"].toString();
+          List<String> _brkServerPagePath = _serverPagePath.split("/");
+          int _pathLen = _brkServerPagePath.length;
+          _gpageFolder = _brkServerPagePath[_pathLen - 2];
         }
       }
+        for(int _k=0; _k<_magpageCount; _k++) {
+          String _targPageStr="page${_k + 1}.jpg";
+          File _tmpFile= File(_innerPages.path + "/$_gpageFolder-$_targPageStr");
+          if(await _tmpFile.exists()){
+            if(_k==0){
+              _pageBusyOpacity=0;
+              _pageBusyCtr.add("kjut");
+            }
+            _magPages.add(Container(
+              width: _screenSize.width,
+              child: Container(
+                height: _screenSize.width * (1/_gmagAR),
+                width: _screenSize.width,
+                decoration: BoxDecoration(
+                    image: DecorationImage(
+                        image: FileImage(_tmpFile),
+                        fit: BoxFit.fill,
+                        alignment: Alignment.topCenter
+                    )
+                ),
+              ),
+            ));
+
+          }
+          else{
+            break;
+          }
+        }
+      _pageAvailableNotifier.add("kjut");
     }
     catch(ex){
 
     }
   }//fetch pages
 
+  final GlobalKey _commentKey= GlobalKey();
   List<Container> _magPages= List<Container>();
   StreamController _pageAvailableNotifier= StreamController.broadcast();
 
@@ -121,7 +148,10 @@ class _ReadMagazine extends State<ReadMagazine>{
   double _pageBusyAmount=.5;
   String _pageBusyText="Loading ...";
   double _pageBusyAnimationEndVal=0;
-  bool _bookmarked=false;
+
+  StreamController _globPageChangeNotifier= StreamController.broadcast();
+  String _globCurrentPage="1";
+
   BuildContext _pageContext;
   Size _screenSize;
   @override
@@ -142,7 +172,65 @@ class _ReadMagazine extends State<ReadMagazine>{
             ),
           ),
         ),
-
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+        floatingActionButton: Container(
+          height: 50,
+          width: _screenSize.width,
+          padding: EdgeInsets.only(left:20),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Material(
+                key: _commentKey,
+                color: Colors.transparent,
+                child: InkResponse(
+                  onTap: (){
+                    Navigator.of(_pageContext).push(
+                      CircularClipRoute(
+                        expandFrom: _commentKey.currentContext,
+                        builder: (BuildContext _ctx){
+                          return MagComment(widget.magazineId, _globCurrentPage, widget.magazineTitle);
+                        }
+                      )
+                    );
+                  },
+                  child: Container(
+                    padding: EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: Colors.blue,
+                      borderRadius: BorderRadius.circular(50)
+                    ),
+                    child: Icon(
+                        FlutterIcons.comments_o_faw,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                ),
+              ),
+              StreamBuilder(
+                stream: _globPageChangeNotifier.stream,
+                builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Color.fromRGBO(20, 20, 20, 1)
+                    ),
+                    padding: EdgeInsets.only(left: 12, right: 32, top: 7, bottom: 7),
+                    child: Text(
+                      _globCurrentPage + " / " + _magpageCount.toString(),
+                      style: TextStyle(
+                        fontSize: 20,
+                        color: Colors.white,
+                        fontFamily: "ubuntu"
+                      ),
+                    ),
+                  );
+                },
+              )
+            ],
+          ),
+        ),
         body: FocusScope(
           child: Container(
             child: Stack(
@@ -150,23 +238,38 @@ class _ReadMagazine extends State<ReadMagazine>{
               children: <Widget>[
                 Container(
                   height: _screenSize.height,
-                  child: ListView(
-                    children: <Widget>[
-                      Container(
-                        padding:EdgeInsets.only(top: 12),
-                        child: StreamBuilder(
-                          stream: _pageAvailableNotifier.stream,
-                          builder: (BuildContext _ctx, _snapshot){
-                            if(_magPages.length>0){
-                              return Container(
-                                child: LiquidSwipe(pages: _magPages),
-                              );
-                            }
-                            else return Container();
-                          },
-                        ),
-                      )//the inner pages display
-                    ],
+                  width: _screenSize.width,
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    decoration: BoxDecoration(
+                        border: Border(
+                            top: BorderSide(
+                                width: (_screenSize.height<1000) ? 64 : 0,
+                                color: Colors.black
+                            )
+                        )
+                    ),
+                    alignment: Alignment.topCenter,
+                    height: (_screenSize.height>1200) ? _screenSize.height - 150 : _screenSize.height,
+                    child: StreamBuilder(
+                      stream: _pageAvailableNotifier.stream,
+                      builder: (BuildContext _ctx, _snapshot){
+                        if(_magPages.length>0){
+                          return Container(
+
+                            width: _screenSize.width, height: ((1/_gmagAR) * _screenSize.width) - .35,
+                            child: LiquidSwipe(
+                                pages: _magPages,
+                              onPageChangeCallback: (int _cp){
+                                _globCurrentPage= "${_cp +1}";
+                                _globPageChangeNotifier.add("kjut");
+                              },
+                            ),
+                          );
+                        }
+                        else return Container();
+                      },
+                    ),
                   ),
                 ),
                 _kjToast,
@@ -247,6 +350,34 @@ class _ReadMagazine extends State<ReadMagazine>{
                     ),
                   ),
                 ),//page busy cue
+                StreamBuilder(
+                  stream: globals.globalCtr.stream,
+                  builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+                    if(_snapshot.hasData && _snapshot.data["sender"] == "readmagazinefetchpages") fetchPages();
+                    return Container();
+                  },
+                ),//we will use this one to monitor the fetch pages progress in the isolate
+                StreamBuilder(
+                  stream: _bookmarkNotifier.stream,
+                  builder: (BuildContext _ctx, _snapshot){
+                    return Positioned(
+                      right: 5, top: -4,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkResponse(
+                          onTap: (){
+                            bookUnbookMark();
+                          },
+                          child: Icon(
+                            FlutterIcons.bookmark_ent,
+                            color: _bookmarked ? (_screenSize.height < 1000) ? Colors.blue : Colors.deepOrange: (_screenSize.height < 1000) ? Colors.white : Colors.black,
+                            size: 48,
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                )
               ],
             ),
           ),
@@ -255,8 +386,75 @@ class _ReadMagazine extends State<ReadMagazine>{
         ),
         ),
       onWillPop: ()async{
-        Navigator.of(_pageContext).pop();
-        return false;
+        if(_bookmarked==false) {
+          displayAlert(
+              title: Text(
+                  "Not Bookmarked",
+              ),
+              content: Text(
+                  "Wouldn't you like to save this magazine for offline reading? \n\nTap 'Yes' to save now"
+              ),
+              action: [
+                Container(
+                  child: RaisedButton(
+                    padding: EdgeInsets.only(top: 5, bottom: 5, right: 16, left: 16),
+                    color: Colors.orange,
+                    textColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(7)
+                    ),
+                    onPressed: (){
+                      bookmarg();
+                      Navigator.pop(dlgCtx);
+                      Navigator.pop(_pageContext);
+                    },
+                    child: Container(
+                      child: Row(
+                        children: <Widget>[
+                          Icon(
+                            FlutterIcons.thumbs_up_ent,
+                            color: Colors.white,
+                          ),
+                          Container(
+                            margin: EdgeInsets.only(left:5),
+                            child: Text(
+                              "Yes",
+                              style: TextStyle(
+                                  fontSize: 13
+                              ),
+                            ),
+                          )
+                        ],
+                      )
+                    ),
+                  ),
+                ),
+                Container(
+                  margin: EdgeInsets.only(left: 12),
+                  child: RaisedButton(
+                    color: Colors.red,
+                    textColor: Colors.white,
+                    onPressed: (){
+                      unbookmarg();
+                      Navigator.pop(dlgCtx);
+                      Navigator.pop(_pageContext);
+                    },
+                    child: Text(
+                      "No, please",
+                      style: TextStyle(
+
+                      ),
+                    ),
+                  ),
+                )
+              ]
+          );
+          return false;
+        }
+        else{
+          Navigator.of(_pageContext).pop();
+          return false;
+        }
       },
     );
   }//route's build method
@@ -271,5 +469,38 @@ class _ReadMagazine extends State<ReadMagazine>{
     _pageBusyCtr.close();
     _pageBusyFloatingCtr.close();
     _pageAvailableNotifier.close();
+    _globPageChangeNotifier.close();
   }//route's dispose method
+
+  BuildContext dlgCtx;
+  displayAlert({@required Widget title, @required Widget content,  List<Widget> action}){
+    showDialog(
+        barrierDismissible: false,
+        context: _pageContext,
+        builder: (BuildContext localCtx){
+          dlgCtx=localCtx;
+          return AlertDialog(
+            title: title,
+            content: content,
+            actions: (action!=null && action.length>0) ? action: null,
+            backgroundColor: Color.fromRGBO(20, 20, 60, 1),
+            contentTextStyle: TextStyle(
+                color: Colors.white,
+              fontSize: 15
+            ),
+            titleTextStyle: TextStyle(
+                fontFamily: "ubuntu",
+                color: Colors.white,
+              fontSize: 16
+            ),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(7),
+                side: BorderSide(
+                    color: Colors.transparent
+                )
+            ),
+          );
+        }
+    );
+  }//displayAlert
 }

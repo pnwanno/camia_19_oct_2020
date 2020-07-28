@@ -11,6 +11,7 @@ import './dbs.dart';
 import './my_wall/index.dart';
 import './camtv/index.dart';
 import './magazine/index.dart';
+import './dictionary/index.dart';
 
 class LaunchPage extends StatefulWidget{
   _LaunchPage createState(){
@@ -75,6 +76,7 @@ class _LaunchPage extends State<LaunchPage>{
   final _wallKey= GlobalKey();
   final _cmtvKey= GlobalKey();
   final _citimagKey= GlobalKey();
+  final _dictionaryKey=GlobalKey();
   int buttonAniDur=300;
   Widget pageBody(){
     return Stack(
@@ -314,6 +316,7 @@ class _LaunchPage extends State<LaunchPage>{
 
 
                     AnimatedContainer(
+                      key: _dictionaryKey,
                       duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 5 ? EdgeInsets.all(5) : EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -325,6 +328,19 @@ class _LaunchPage extends State<LaunchPage>{
                         child: InkResponse(
                           onTap: (){
                             selectIcon(5);
+                            Future.delayed(
+                                Duration(milliseconds: (buttonAniDur * 2) + 50),
+                                    (){
+                                  Navigator.of(_pageContext).push(
+                                      CircularClipRoute(
+                                          expandFrom: _dictionaryKey.currentContext,
+                                          builder: (BuildContext ctx){
+                                            return LWDictionary();
+                                          }
+                                      )
+                                  );
+                                }
+                            );
                           },
                           child: Container(
                             width: 80, height: 80,
