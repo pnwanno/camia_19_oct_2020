@@ -149,7 +149,7 @@ class _MagComment extends State<MagComment>{
   }//stamp shadow
 
   String _replyToId="";
-  String _replyToName="";
+ // String _replyToName="";
   postComment()async{
     try{
       if(_commentCtr.text!=""){
@@ -167,7 +167,7 @@ class _MagComment extends State<MagComment>{
         );
         if(_resp.statusCode == 200){
           _replyToId="";
-          _replyToName="";
+          //_replyToName="";
           if(_resp.body == "success"){
             fetchMagBody();
           }

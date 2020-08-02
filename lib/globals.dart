@@ -2,7 +2,10 @@ library camia.globals;
 
 import 'dart:async';
 import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart' as urlLauncher;
 
 String email="";
 String password="";
@@ -16,6 +19,38 @@ String globBaseUrl="https://camia.blwcampusministry.com/app-engine/front-api.php
 String globBaseUrl2="https://camia.blwcampusministry.com/app-engine/front-api2.php";
 
 StreamController globalCtr= StreamController.broadcast();
+
+
+enum KWordcase{
+  sentence_case,
+  proper_case,
+  camel_case
+}
+///Custom method to less familiar word cases
+String kChangeCase(String word, KWordcase to){
+  String _tolower= word.toLowerCase().replaceAll("jesus", "Jesus").replaceAll("christ", "Christ").replaceAll("god", "God");
+  List<String> _brkword= _tolower.split(" ");
+  int _count= _brkword.length;
+  if(to == KWordcase.sentence_case){
+    String _firstchar= _tolower.substring(0,1);
+    return _firstchar.toUpperCase() + _tolower.replaceFirst(_firstchar.toLowerCase(), "");
+  }
+  String _retword="";
+  for(int _k=0; _k<_count; _k++){
+    if(to ==  KWordcase.proper_case){
+      _retword += " " + kChangeCase(_brkword[_k], KWordcase.sentence_case);
+    }
+    else if(to ==  KWordcase.camel_case){
+      if(_k == 0){
+        _retword=_brkword[0];
+      }
+      else{
+        _retword += " " + kChangeCase(_brkword[_k], KWordcase.sentence_case);
+      }
+    }
+  }
+  return _retword.trim();
+}
 
 Path logoPath(Size size){
   Path path=Path();
@@ -124,6 +159,102 @@ class KjToast extends StatelessWidget{
     });
   }//show toast
 }
+
+
+
+
+RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);
+RegExp _href= RegExp(r"[a-z0-9-]+\.[a-z0-9-]+", caseSensitive: false);
+RegExp _atTag= RegExp(r"^@[a-z0-9_]+$", caseSensitive: false);
+RegExp _isEmail= RegExp(r"^[a-z_0-9.-]+\@[a-z0-9-]+\.[a-z0-9-]+(\.[a-z0-9-]+)*$", caseSensitive: false);
+RegExp _phoneExp= RegExp(r"^[0-9 -]+$");
+
+///Tries to open a URL or a local link (an app link)
+followLink(String _link){
+  if(_isEmail.hasMatch(_link)){
+    urlLauncher.canLaunch("mailto:$_link").then((_canLaunch) {
+      if(_canLaunch){
+        urlLauncher.launch("mailto:$_link");
+      }
+    });
+  }
+  else if(_href.hasMatch(_link)){
+    String _newhref= "https://" + _link.replaceAll(RegExp(r"^https?:\/\/",caseSensitive: false), "");
+    urlLauncher.canLaunch(_newhref).then((_canLaunch) {
+      if(_canLaunch){
+        urlLauncher.launch(_newhref);
+      }
+    });
+  }
+  else if(_phoneExp.hasMatch(_link)){
+    String _newphone= "tel:$_link";
+    urlLauncher.canLaunch(_newphone).then((_canLaunch) {
+      if(_canLaunch){
+        urlLauncher.launch(_newphone);
+      }
+    });
+  }
+}
+
+parseTextForLinks(String _textData){
+  _textData=_textData.replaceAll("\n", "__kjut__ ");
+  List<String> _brkPostText= _textData.split(" ");
+  int _brkPostTextCount= _brkPostText.length;
+  List<InlineSpan> _postTextSpan= List<InlineSpan>();
+  String _curPostText="";
+  for(int _j=0; _j<_brkPostTextCount; _j++){
+    String _curText=_brkPostText[_j];
+    if(_phoneExp.hasMatch(_curText) || _isEmail.hasMatch(_curText) || _htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
+      _postTextSpan.add(
+          TextSpan(
+              text: _curPostText.replaceAll("__kjut__ ", "\n") + " ",
+              style: TextStyle(
+                  height: 1.5
+              )
+          )
+      );
+      _curPostText="";
+      _postTextSpan.add(
+          TextSpan(
+              text: _curText.replaceAll("__kjut__ ", "\n") + " ",
+              style: TextStyle(
+                  color: (_isEmail.hasMatch(_curText)) ? Colors.orange :
+                  (_href.hasMatch(_curText) || _phoneExp.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey,
+                  height: 1.5
+              ),
+              recognizer: TapGestureRecognizer()..onTap=(){
+                followLink(_curText);
+              }
+          )
+      );
+    }
+    else{
+      _curPostText += _curText.replaceAll("__kjut__ ", "\n") + " ";
+    }
+  }
+  _postTextSpan.add(
+      TextSpan(
+          text: _curPostText.replaceAll("__kjut__ ", "\n"),
+          style: TextStyle(
+              height: 1.5
+          )
+      )
+  );
+  return _postTextSpan;
+}//parse text for links
+
+convertToK(int val){
+  List<String> units=["K", "M", "B"];
+  double remain = val/1000;
+  int counter=-1;
+  if(remain>1) counter++;
+  while(remain>999){
+    counter++;
+    remain /=1000;
+  }
+  if(counter>-1) return remain.toStringAsFixed(1) + units[counter];
+  return "$val";
+}//convert to k m or b
 
 
 class KjutPullRefresh extends StatefulWidget{

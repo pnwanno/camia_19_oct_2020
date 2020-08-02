@@ -4,6 +4,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:circular_clip_route/circular_clip_route.dart';
+import 'package:url_launcher/url_launcher.dart' as urllaunch;
 
 import './globals.dart' as globals;
 import './dbs.dart';
@@ -148,6 +149,88 @@ class _LaunchPage extends State<LaunchPage>{
                   ),
                   children: <Widget>[
                     AnimatedContainer(
+                      key: _citimagKey,
+                      duration: Duration(milliseconds: buttonAniDur),
+                      padding: selectedIcon == 10 ? EdgeInsets.all(5) : EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color:selectedIcon == 10 ? Color.fromRGBO(255, 215, 15, 1) : Color.fromRGBO(49, 108, 197, 1),
+                          borderRadius: BorderRadius.circular(16)
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkResponse(
+                          onTap: (){
+                            selectIcon(10);
+                            Future.delayed(
+                                Duration(milliseconds: (buttonAniDur * 2) + 50),
+                                    (){
+                                  Navigator.of(_pageContext).push(
+                                      CircularClipRoute(
+                                          expandFrom: _citimagKey.currentContext,
+                                          builder: (BuildContext ctx){
+                                            return CitiMag();
+                                          }
+                                      )
+                                  );
+                                }
+                            );
+                          },
+                          child: Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                                image: DecorationImage(
+                                    image: AssetImage("./images/citi_mag.png"),
+                                    fit: BoxFit.contain
+                                )
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),//citi magazine
+
+
+                    AnimatedContainer(
+                      key: _dictionaryKey,
+                      duration: Duration(milliseconds: buttonAniDur),
+                      padding: selectedIcon == 5 ? EdgeInsets.all(5) : EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color: selectedIcon == 5 ? Color.fromRGBO(49, 108, 197, 1) : Color.fromRGBO(255, 215, 15, 1),
+                          borderRadius: BorderRadius.circular(16)
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkResponse(
+                          onTap: (){
+                            selectIcon(5);
+                            Future.delayed(
+                                Duration(milliseconds: (buttonAniDur * 2) + 50),
+                                    (){
+                                  Navigator.of(_pageContext).push(
+                                      CircularClipRoute(
+                                          expandFrom: _dictionaryKey.currentContext,
+                                          builder: (BuildContext ctx){
+                                            return LWDictionary();
+                                          }
+                                      )
+                                  );
+                                }
+                            );
+                          },
+                          child: Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                                image: DecorationImage(
+                                    image: AssetImage("./images/lw_dict.png"),
+                                    fit: BoxFit.contain
+                                )
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),//loveworld dictionary
+
+
+                    AnimatedContainer(
                       key:_wallKey,
                       duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 0 ? EdgeInsets.all(5) : EdgeInsets.all(12),
@@ -186,7 +269,6 @@ class _LaunchPage extends State<LaunchPage>{
                         ),
                       ),
                     ),//mywall
-
 
 
                     AnimatedContainer(
@@ -230,7 +312,6 @@ class _LaunchPage extends State<LaunchPage>{
                     ), //camtv
 
 
-
                     AnimatedContainer(
                       padding: selectedIcon == 2 ? EdgeInsets.all(5) : EdgeInsets.all(12),
                       duration: Duration(milliseconds: buttonAniDur),
@@ -257,6 +338,33 @@ class _LaunchPage extends State<LaunchPage>{
                       ),
                     ),//campods
 
+
+                    AnimatedContainer(
+                      duration: Duration(milliseconds: buttonAniDur),
+                      padding: selectedIcon == 11 ? EdgeInsets.all(5) : EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                          color:selectedIcon == 11 ? Color.fromRGBO(49, 108, 197, 1) : Color.fromRGBO(255, 215, 15, 1),
+                          borderRadius: BorderRadius.circular(16)
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkResponse(
+                          onTap: (){
+                            selectIcon(11);
+                            urllaunch.launch("https://blwcampusministry.com/en/donate");
+                          },
+                          child: Container(
+                            width: 80, height: 80,
+                            decoration: BoxDecoration(
+                                image: DecorationImage(
+                                    image: AssetImage("./images/donate.png"),
+                                    fit: BoxFit.contain
+                                )
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),//donate
 
 
                     AnimatedContainer(
@@ -286,7 +394,6 @@ class _LaunchPage extends State<LaunchPage>{
                     ),//chapter finder
 
 
-
                     AnimatedContainer(
                       duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 4 ? EdgeInsets.all(5) : EdgeInsets.all(12),
@@ -314,48 +421,6 @@ class _LaunchPage extends State<LaunchPage>{
                     ),//dm
 
 
-
-                    AnimatedContainer(
-                      key: _dictionaryKey,
-                      duration: Duration(milliseconds: buttonAniDur),
-                      padding: selectedIcon == 5 ? EdgeInsets.all(5) : EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: selectedIcon == 5 ? Color.fromRGBO(49, 108, 197, 1) : Color.fromRGBO(255, 215, 15, 1),
-                        borderRadius: BorderRadius.circular(16)
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkResponse(
-                          onTap: (){
-                            selectIcon(5);
-                            Future.delayed(
-                                Duration(milliseconds: (buttonAniDur * 2) + 50),
-                                    (){
-                                  Navigator.of(_pageContext).push(
-                                      CircularClipRoute(
-                                          expandFrom: _dictionaryKey.currentContext,
-                                          builder: (BuildContext ctx){
-                                            return LWDictionary();
-                                          }
-                                      )
-                                  );
-                                }
-                            );
-                          },
-                          child: Container(
-                            width: 80, height: 80,
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: AssetImage("./images/lw_dict.png"),
-                                fit: BoxFit.contain
-                              )
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),//loveworld dictionary
-                    
-                  
                     AnimatedContainer(
                       duration: Duration(milliseconds: buttonAniDur),
                       padding: selectedIcon == 6 ? EdgeInsets.all(5) : EdgeInsets.all(12),
@@ -462,76 +527,6 @@ class _LaunchPage extends State<LaunchPage>{
                         ),
                       ),
                     ),//outreaches
-
-
-                    AnimatedContainer(
-                      key: _citimagKey,
-                        duration: Duration(milliseconds: buttonAniDur),
-                      padding: selectedIcon == 10 ? EdgeInsets.all(5) : EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:selectedIcon == 10 ? Color.fromRGBO(255, 215, 15, 1) : Color.fromRGBO(49, 108, 197, 1),
-                        borderRadius: BorderRadius.circular(16)
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkResponse(
-                          onTap: (){
-                            selectIcon(10);
-                            Future.delayed(
-                                Duration(milliseconds: (buttonAniDur * 2) + 50),
-                                    (){
-                                  Navigator.of(_pageContext).push(
-                                      CircularClipRoute(
-                                          expandFrom: _citimagKey.currentContext,
-                                          builder: (BuildContext ctx){
-                                            return CitiMag();
-                                          }
-                                      )
-                                  );
-                                }
-                            );
-                          },
-                          child: Container(
-                            width: 80, height: 80,
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: AssetImage("./images/citi_mag.png"),
-                                fit: BoxFit.contain
-                              )
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),//citi magazine
-
-
-                    AnimatedContainer(
-                      duration: Duration(milliseconds: buttonAniDur),
-                      padding: selectedIcon == 11 ? EdgeInsets.all(5) : EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color:selectedIcon == 11 ? Color.fromRGBO(49, 108, 197, 1) : Color.fromRGBO(255, 215, 15, 1),
-                        borderRadius: BorderRadius.circular(16)
-                      ),
-                      child: Material(
-                        color: Colors.transparent,
-                        child: InkResponse(
-                          onTap: (){
-                            selectIcon(11);
-                          },
-                          child: Container(
-                            width: 80, height: 80,
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: AssetImage("./images/pargon.png"),
-                                fit: BoxFit.contain
-                              )
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),//pargon
-
-                    
                   ],
                 ),
               )

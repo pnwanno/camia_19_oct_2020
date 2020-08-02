@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -12,9 +13,9 @@ import 'package:flutter_icons/flutter_icons.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:video_player/video_player.dart';
-import 'package:url_launcher/url_launcher.dart' as urlLauncher;
+import 'package:circular_clip_route/circular_clip_route.dart';
 
-import './add_mywall_post_dialog.dart';
+import './new_post.dart';
 import '../globals.dart' as globals;
 import '../dbs.dart';
 import './my_profile.dart';
@@ -38,24 +39,10 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   Map<String, Map> postPPt= Map<String, Map>();
   
   StreamController dpChangedCtr= StreamController.broadcast();
-  ///The stream controller for wall list view render changes
-  StreamController wallRenderCtr= StreamController.broadcast();
 
   ///The scroll controller for the wall's primary list view
   ScrollController wallScrollCtr;
   StreamController pullRefreshCtr= StreamController.broadcast();
-  convertToK(int val){
-    List<String> units=["K", "M", "B"];
-    double remain = val/1000;
-    int counter=-1;
-    if(remain>1) counter++;
-    while(remain>999){
-      counter++;
-      remain /=1000;
-    }
-    if(counter>-1) return remain.toStringAsFixed(1) + units[counter];
-    return "$val";
-  }//convert to k m or b
 
   
   likeUnlikePost(String postId)async{
@@ -80,86 +67,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     }
   }//like unlike post
 
-  RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);
-  RegExp _href= RegExp(r"[a-z0-9-]+\.[a-z0-9-]+", caseSensitive: false);
-  RegExp _atTag= RegExp(r"^@[a-z0-9_]+$", caseSensitive: false);
-  RegExp _isEmail= RegExp(r"^[a-z_0-9.-]+\@[a-z0-9-]+\.[a-z0-9-]+(\.[a-z0-9-]+)*$", caseSensitive: false);
-  RegExp _phoneExp= RegExp(r"^[0-9 -]+$");
-
-  ///Tries to open a URL or a local link (an app link)
-  followLink(String _link){
-    if(_isEmail.hasMatch(_link)){
-      urlLauncher.canLaunch("mailto:$_link").then((_canLaunch) {
-        if(_canLaunch){
-          urlLauncher.launch("mailto:$_link");
-        }
-      });
-    }
-    else if(_href.hasMatch(_link)){
-      String _newhref= "https://" + _link.replaceAll(RegExp(r"^https?:\/\/",caseSensitive: false), "");
-      urlLauncher.canLaunch(_newhref).then((_canLaunch) {
-        if(_canLaunch){
-          urlLauncher.launch(_newhref);
-        }
-      });
-    }
-    else if(_phoneExp.hasMatch(_link)){
-      String _newphone= "tel:$_link";
-      urlLauncher.canLaunch(_newphone).then((_canLaunch) {
-        if(_canLaunch){
-          urlLauncher.launch(_newphone);
-        }
-      });
-    }
-  }
-
-  parseTextForLinks(String _textData){
-    _textData=_textData.replaceAll("\n", "__kjut__ ");
-    List<String> _brkPostText= _textData.split(" ");
-    int _brkPostTextCount= _brkPostText.length;
-    List<InlineSpan> _postTextSpan= List<InlineSpan>();
-    String _curPostText="";
-    for(int _j=0; _j<_brkPostTextCount; _j++){
-      String _curText=_brkPostText[_j];
-      if(_phoneExp.hasMatch(_curText) || _isEmail.hasMatch(_curText) || _htag.hasMatch(_curText) || _atTag.hasMatch(_curText) || _href.hasMatch(_curText)){
-        _postTextSpan.add(
-            TextSpan(
-                text: _curPostText.replaceAll("__kjut__ ", "\n") + " ",
-                style: TextStyle(
-                    height: 1.5
-                )
-            )
-        );
-        _curPostText="";
-        _postTextSpan.add(
-            TextSpan(
-                text: _curText.replaceAll("__kjut__ ", "\n") + " ",
-                style: TextStyle(
-                    color: (_isEmail.hasMatch(_curText)) ? Colors.orange :
-                    (_href.hasMatch(_curText) || _phoneExp.hasMatch(_curText)) ? Colors.blue : Colors.blueGrey,
-                    height: 1.5
-                ),
-                recognizer: TapGestureRecognizer()..onTap=(){
-                  followLink(_curText);
-                }
-            )
-        );
-      }
-      else{
-        _curPostText += _curText.replaceAll("__kjut__ ", "\n") + " ";
-      }
-    }
-    _postTextSpan.add(
-        TextSpan(
-            text: _curPostText.replaceAll("__kjut__ ", "\n"),
-            style: TextStyle(
-                height: 1.5
-            )
-        )
-    );
-    return _postTextSpan;
-  }//parse text for links
-
   ///Adds or remove a post from bookmark list of wall posts
   Future bookmarkPost(String _postId)async{
     Database _con= await dbTables.wallPosts();
@@ -173,7 +80,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         }
       }
     });
-  }
+  }//bookmark post
 
   Future<bool> postComment(String postId)async{
     if(_wallPostCommentCtr.containsKey(postId)){
@@ -231,14 +138,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   bool refreshData=true;
   String postPos="0";
 
-
-  Future<void> fetchPosts({String caller})async{
-    bool resp= await fetchLocalData(caller: caller);
-    if(resp){
-      renderWall();
-    }
-  }//fetch posts
-
   Future<Widget> fetchTrendingHashTags()async{
     try{
       http.Response _resp=await http.post(
@@ -261,16 +160,16 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
                       margin: EdgeInsets.only(right: 12),
                       padding: EdgeInsets.only(left:16, right: 16, top: 5, bottom: 5),
                       decoration: BoxDecoration(
-                        color: Color.fromRGBO(225, 225, 225, 1),
-                        borderRadius: BorderRadius.circular(7),
+                        color: Color.fromRGBO(41, 41, 41, 1),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Colors.grey
+                          color: Color.fromRGBO(80, 80, 80, 1)
                         )
                       ),
                       child: Text(
-                        key,
+                        globals.kChangeCase(key, globals.KWordcase.sentence_case),
                         style: TextStyle(
-                          fontFamily: "sail"
+                          color: Colors.white
                         ),
                       ),
                     ),
@@ -281,11 +180,30 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
           _kounter++;
         });
 
-        return ListView(
-          reverse: true,
-          physics: BouncingScrollPhysics(),
-          scrollDirection: Axis.horizontal,
-          children: _liChildren,
+        return TweenAnimationBuilder(
+          tween: Tween<double>(
+            begin: 0, end: 1
+          ),
+          duration: Duration(seconds: 1),
+          curve: Curves.easeInOut,
+          builder: (BuildContext _ctx, double _curval, _){
+            return Opacity(
+              opacity: _curval,
+              child: Container(
+                padding: EdgeInsets.only(top: 9, bottom: 9, left: 24),
+                decoration: BoxDecoration(
+                    color: Color.fromRGBO(31, 31, 31, 1)
+                ),
+                width: _screenSize.width, height: 50,
+                child: ListView(
+                  reverse: true,
+                  physics: BouncingScrollPhysics(),
+                  scrollDirection: Axis.horizontal,
+                  children: _liChildren,
+                ),
+              ),
+            );
+          },
         );
       }
       else return Container();
@@ -297,94 +215,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     }
   }
 
-  Widget _wallBlocks;
-  double pullRefreshHeight=0;
-  double pullRefreshLoadHeight=80;
-  ///Renders the page with data from 'serverData' variable
-  renderWall(){
-    try{
-      var _wallObj= _serverData;
-      _wallBlocks= kjPullToRefresh(
-        child: ListView.builder(
-          controller: wallScrollCtr,
-          cacheExtent: MediaQuery.of(_pageContext).size.height * 3,
-          itemCount: _wallObj.length,
-          itemBuilder: (BuildContext ctx, int itemIndex){
-            if(itemIndex == 0){
-              return Column(
-                children: <Widget>[
-                  pullToRefreshContainer(),
-                  wallBlock(
-                    blockIndex: itemIndex
-                  ),
-                  Container(
-                    padding: EdgeInsets.only(top:12, bottom:12),
-                    margin: EdgeInsets.only(top: 12, bottom: 12),
-                    height: 250,
-                    decoration: BoxDecoration(
-                      color: Color.fromRGBO(40, 40, 40, 1)
-                    ),
-                    width: _screenSize.width,
-                    child: Column(
-                      children: <Widget>[
-                        Container(
-                          padding: EdgeInsets.only(left:12, right:12),
-                          margin:EdgeInsets.only(bottom: 16),
-                          child: Flex(
-                            direction: Axis.horizontal,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: <Widget>[
-                              Flexible(
-                                flex:7,
-                                child: Text(
-                                  "Friends' suggestion",
-                                  style: TextStyle(
-                                    color: Colors.white
-                                  ),
-                                ),
-                              ),
-                              Flexible(
-                                flex:3,
-                                child: Container(
-                                  alignment: Alignment.topRight,
-                                  child: Material(
-                                    color: Colors.transparent,
-                                    child: InkResponse(
-                                      onTap: (){
-
-                                      },
-                                      child: Text(
-                                        "See All",
-                                        style: TextStyle(
-                                            color: Colors.blue
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              )
-                            ],
-                          ),
-                        )
-                      ],
-                    ),
-                  ), //suggested for you
-                ],
-              );
-            }
-            else{
-              return wallBlock(
-                  blockIndex: itemIndex
-              );
-            }
-          }
-        ),
-      );
-      wallRenderCtr.add(_wallBlocks);
-    }
-    catch(_ex){
-    }
-  }//render wall
 
   List<String> imageExts= ["jpg", "png", "gif"];
   List<String> videoExts= ["mp4"];
@@ -401,601 +231,8 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
 
   Map<String, String> _wallBooked=Map<String, String>();
   StreamController _wallBookedCtr= StreamController.broadcast();
-  Map<String, int> _wallPostBlock= Map<String, int>();
   Map<String, TextEditingController> _wallPostCommentCtr= Map<String, TextEditingController>();
 
-  ///A block in the wall
-  Widget wallBlock({int blockIndex}){
-    String _postDir= _appdir.path + "/wall_dir/post_media";
-    var wallObj= _serverData;
-    String postId= wallObj[blockIndex]["post_id"];
-    wallMediaPageCtr["$postId"]=PageController();
-
-    _wallPostBlock[postId]= blockIndex;
-
-    if(!_wallPVCurPage.containsKey(postId)){
-      _wallPVCurPage[postId]= 0;
-    }
-    wallMediaPageCtr["$postId"].addListener(() {
-      double _localCurPage=wallMediaPageCtr[postId].page;
-      if(_localCurPage.floor() == _localCurPage){
-        if(wallMediaPageCtr[postId].hasClients){
-            _wallPVCurPage[postId]=_localCurPage.toInt();
-        }
-        pauseAllVids();
-        String _localVideoKey=postId + "." + _localCurPage.toInt().toString();
-        if(wallVideoCtr.containsKey(_localVideoKey)){
-          wallVideoCtr[_localVideoKey].play();
-        }
-        pageChangeNotifier.add("kjut");
-      }
-    });
-    List postMedia= jsonDecode(wallObj[blockIndex]["post_images"]);
-    List<Widget> pvChildren= List<Widget>();
-    int mediaCount= postMedia.length;
-    List<String> _brkAR= postMedia[0]["ar"].toString().split("/");
-    double _mediaAR= double.tryParse(_brkAR[0]) / double.tryParse(_brkAR[1]);
-    double pvHeight= _screenSize.width * (1/_mediaAR);
-    for(int k=0; k<mediaCount; k++){
-      String targMediaName=postMedia[k]["file"];
-      List<String> brkMediaName= targMediaName.split(".");
-      String mediaExt= brkMediaName.last;
-      if(imageExts.indexOf(mediaExt)>-1){
-        pvChildren.add(
-          Container(
-            width: _screenSize.width,
-            child: Stack(
-              children: <Widget>[
-                Container(
-                  width:_screenSize.width,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: FileImage(File(_postDir + "/" + postMedia[k]["file"])),
-                      fit: BoxFit.fitWidth,
-                      alignment: Alignment.topLeft
-                    )
-                  ),
-                )
-              ],
-            ),
-          )
-        );
-      }
-      else{
-        String _tmpPlayerKey="$postId.$k";
-        if(!wallVideoCtr.containsKey("$_tmpPlayerKey")) {
-          wallVideoCtr["$_tmpPlayerKey"] = VideoPlayerController.file(File(_postDir + "/" + postMedia[k]["file"]));
-          wallVideoCtr["$_tmpPlayerKey"].initialize().then((value) {
-            wallVideoCtr["$_tmpPlayerKey"].setVolume(0);
-            wallVideoCtr["$_tmpPlayerKey"].seekTo(Duration(milliseconds: 500));
-            wallVideoCtr["$_tmpPlayerKey"].setLooping(true);
-          });
-        }
-        List<String> _brkVAR= postMedia[k]["ar"].toString().split("/");
-        double _mediaVAR= double.tryParse(_brkVAR[0]) / double.tryParse(_brkVAR[1]);
-
-        pvChildren.add(
-           Container(
-             width: _screenSize.width,
-             child: Stack(
-               children: <Widget>[
-                  Container(
-                    height: double.infinity,
-                    alignment: Alignment.center,
-                    child: AspectRatio(
-                    aspectRatio: _mediaVAR,
-                    child: VideoPlayer(
-                        wallVideoCtr["$_tmpPlayerKey"]
-                      ),
-                    )
-                  ), //Player container
-                 Positioned(
-                   right: 16, bottom: 12,
-                   child: Material(
-                     color: Colors.transparent,
-                     child: InkResponse(
-                       onTap: (){
-                         if(_globalMute){
-                           _globalMute=false;
-                         }
-                         else{
-                           _globalMute=true;
-                         }
-                         _vidVolCtrl.add("kjut");
-                         wallVideoCtr.forEach((key, value) {
-                           if(_globalMute){
-                             value.setVolume(0);
-                           }
-                           else value.setVolume(1);
-                         });
-                         },
-                       child: StreamBuilder(
-                         stream: _vidVolCtrl.stream,
-                         builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                           return Icon(
-                             (_globalMute) ?  FlutterIcons.volume_variant_off_mco : FlutterIcons.ios_volume_high_ion,
-                             color: Colors.white,
-                           );
-                         },
-                       ),
-                     ),
-                   ),
-                 )
-               ],
-             ),
-           ) 
-        );
-      }
-    }
-    String dp=wallObj[blockIndex]["dp"];
-
-
-    if(!wallLikes.containsKey(postId)){
-      wallLikes["$postId"]=jsonDecode(wallObj[blockIndex]["likes"]);
-    }
-
-    _wallBooked["$postId"]= wallObj[blockIndex]["book_marked"];
-
-    if(!showMorePost.containsKey(postId)){
-      showMorePost[postId]=false;
-    }
-
-    List _wallComments= jsonDecode(wallObj[blockIndex]["comments"]);
-    if(!_wallBlockKeys.containsKey(postId)){
-      _wallBlockKeys[postId]= GlobalKey();
-    }
-    if(!_wallPostCommentCtr.containsKey(postId)){
-      _wallPostCommentCtr[postId]=TextEditingController();
-    }
-    return Container(
-      key: _wallBlockKeys[postId],
-      margin: EdgeInsets.only(bottom: 24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-
-          /*user dp, username and fullname
-          */
-          Container(
-            margin: EdgeInsets.only(bottom: 9),
-            padding: EdgeInsets.only(left: 12, right: 12),
-            child: Row(
-              children: <Widget>[
-                GestureDetector(
-                  onTap: (){
-                    Navigator.of(_pageContext).push(
-                      MaterialPageRoute(
-                        builder: (BuildContext _ctx){
-                          return WallProfile(wallObj[blockIndex]["user_id"], username: wallObj[blockIndex]["fullname"],);
-                        }
-                      )
-                    );
-                  },
-                  child: Container(
-                    margin: EdgeInsets.only(right:9),
-                    child: dp.length == 1 ?
-                    CircleAvatar(
-                      radius: _screenSize.width < 420 ? 15 : 20,
-                      child: Text(
-                        dp,
-                        style: TextStyle(
-                          color: Colors.white,
-                        ),
-                      ),
-                    ):
-                    CircleAvatar(
-                      radius: _screenSize.width < 420 ? 15 : 20,
-                      backgroundImage: FileImage(File("$_postDir/$dp")),
-                    ),
-                  ),
-                ),//user dp
-                Expanded(
-                  child: Container(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        wallObj[blockIndex]["username"] =="" 
-                        ?Container()
-                        : Container(
-                          margin: EdgeInsets.only(bottom:0),
-                          child: Text(
-                            wallObj[blockIndex]["username"],
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: _globalFontSize,
-                              fontWeight: FontWeight.bold
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),//username if it exists
-                        Container(
-                          child: Text(
-                            wallObj[blockIndex]["fullname"],
-                            style: TextStyle(
-                              color:Colors.white,
-                              fontSize: _globalFontSize
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        )
-                      ],
-                    ),
-                  )
-                )//user name and fullname
-              ],
-            ),
-          ), // user dp username, full name
-
-
-          /*The uploaded media
-          */
-          Container(
-            height: pvHeight,
-            child: PageView(
-              pageSnapping: true,
-              controller: wallMediaPageCtr["$postId"],
-              children: pvChildren,
-            ),
-          ),//the uploaded media
-
-
-          /* like comment share dots and book mark
-          */
-          Container(
-            padding: EdgeInsets.only(left:12, right:12, top:9, bottom: 9),
-            child: Flex(
-              direction: Axis.horizontal,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Flexible(
-                  flex: 4,
-                  child: Row(
-                    children: <Widget>[
-                      StreamBuilder(
-                        stream: wallLikeCtr.stream,
-                        builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                          return Material(
-                            color: Colors.transparent,
-                            child: InkResponse(
-                              onTap: (){
-                                int _ilike=wallLikes[postId].indexOf(globals.userId);
-                                if(_ilike>-1){
-                                  wallLikes[postId].removeAt(_ilike);
-                                }
-                                else{
-                                  wallLikes[postId].add(globals.userId);
-                                }
-                                likeUnlikePost(postId);
-                                wallLikeCtr.add("kjut");
-                              },
-                              child: wallLikes[postId].indexOf(globals.userId)>-1 ?
-                                ScaleTransition(
-                                  scale: _likeAni,
-                                  child: Icon(
-                                    FlutterIcons.ios_heart_ion,
-                                    color: Colors.white,
-                                  ),
-                                ):
-                                Icon(
-                                  FlutterIcons.ios_heart_empty_ion,
-                                  color: Colors.white,
-                                )
-                            ),
-                          );
-                        }
-                      ),//like icon
-
-                      Container(
-                        margin: EdgeInsets.only(
-                          left: _screenSize.width < 420 ? 9 : 12,
-                          right: _screenSize.width < 420 ? 9 : 12
-                        ),
-                        child: Material(
-                          color: Colors.transparent,
-                          child: InkResponse(
-                            onTap: (){
-                              pauseAllVids();
-                              Navigator.push(
-                                  _pageContext,
-                                  MaterialPageRoute(
-                                      builder: (BuildContext _navPushCtx){
-                                        return ViewPostedComments(postId);
-                                      }
-                                  )
-                              );
-                            },
-                            child: Icon(
-                              FlutterIcons.commenting_o_faw,
-                              color: Colors.white,
-                            ),
-                          )
-                        ),
-                      ),// comment Icon
-
-                      Material(
-                        color: Colors.transparent,
-                        child: InkResponse(
-                          child: Icon(
-                            FlutterIcons.send_faw,
-                            color:Colors.white
-                          ),
-                        ),
-                      ), //send icon
-
-                    ],
-                  ),
-                ),//left container
-
-                Flexible(
-                  flex: 5,
-                  child: Container(
-                    child: StreamBuilder(
-                      stream: pageChangeNotifier.stream,
-                      builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                        List<Widget> pageDots= List<Widget>();
-                        for(int k=0; k<mediaCount; k++){
-                          bool isCurPage= _wallPVCurPage[postId] == k;
-                          pageDots.add(
-                            AnimatedContainer(
-                              margin: EdgeInsets.only(right: 3),
-                              duration: Duration(milliseconds: 300),
-                              width: isCurPage ? 7 : 4, 
-                              height: isCurPage ? 7 : 4,
-                              decoration: BoxDecoration(
-                                color: isCurPage ? Colors.blue : Colors.white,
-                                borderRadius: isCurPage ? BorderRadius.circular(16) : BorderRadius.circular(0)
-                              ),
-                            )
-                          );
-                        }
-                        if(mediaCount>1){
-                          return Row(
-                            children: pageDots
-                          );
-                        }
-                        else{
-                          return Container();
-                        }
-                      }
-                    ),
-                  )
-                ),// dots
-
-                Flexible(
-                  flex: 1,
-                  child: Container(
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkResponse(
-                        onTap: (){
-                          bookmarkPost(postId);
-                          _wallBooked["$postId"] == "no" ? _wallBooked["$postId"] = "yes" : _wallBooked["$postId"] = "no";
-                          _wallBookedCtr.add("kjut");
-                        },
-                        child: StreamBuilder(
-                          stream: _wallBookedCtr.stream,
-                          builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                            return Icon(
-                              _wallBooked["$postId"] == "no" ? FlutterIcons.bookmark_o_faw : FlutterIcons.bookmark_faw,
-                              color: Colors.white,
-                            );
-                          }
-                        ),
-                      ),
-                    ),
-                  )
-                )
-              ],
-            ),
-          ),//like, comment, share, dots, bookmark
-
-          /*count likes
-          */
-          Container(
-            padding: EdgeInsets.only(left:12, right:12),
-            child: Row(
-              children: <Widget>[
-                Container(
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkResponse(
-                      onTap: (){
-                        Navigator.of(_pageContext).push(
-                          MaterialPageRoute(
-                            builder: (BuildContext ctx){
-                              return WallPostLikers(postId);
-                            }
-                          )
-                        );
-                      },
-                      child: StreamBuilder(
-                        stream: wallLikeCtr.stream,
-                        builder: (BuildContext _ctx, AsyncSnapshot snapshot){
-                          return Text(
-                            wallLikes[postId].length==1 ? "1 like" : convertToK(wallLikes[postId].length) + " likes",
-                            style: TextStyle(
-                                color: Colors.white
-                            ),
-                          );
-                        },
-                      )
-                    ),
-                  ),
-                )
-              ],
-            ),
-          ), //count likes
-
-
-          /*Post  text
-          */
-          Container(
-            padding: EdgeInsets.only(left:12, right:12),
-            margin: EdgeInsets.only(top:3),
-            child: StreamBuilder(
-              stream: showMorePostCtr.stream,
-              builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                String _postText=wallObj[blockIndex]["post_text"];
-                if(_screenSize.width<420){
-                  if(_postText.length > 90 && showMorePost[postId] == false){
-                    _postText = _postText.substring(0, 90) + "...";
-                  }
-                  else showMorePost[postId]=true;
-                }
-                else{
-                  if(_postText.length > 200 && showMorePost[postId]==false){
-                    _postText = _postText.substring(0, 200) + "...";
-                  }
-                  else showMorePost[postId]=true;
-                }
-                
-                return RichText(
-                    text: TextSpan(
-                        children: <TextSpan>[
-                          TextSpan(
-                              children: parseTextForLinks(_postText),
-                              recognizer: TapGestureRecognizer()..onTap=(){
-                                if(showMorePost[postId] == false){
-                                  showMorePost[postId]=true;
-                                  showMorePostCtr.add("kjut");
-                                }
-                              }
-                          ),
-                          (showMorePost.containsKey(postId) && showMorePost[postId]) ? TextSpan()
-                              : TextSpan(
-                              text: " more",
-                              style: TextStyle(
-                                  color: Colors.grey
-                              ),
-                              recognizer: TapGestureRecognizer()..onTap=(){
-                                showMorePost[postId]=true;
-                                showMorePostCtr.add("kjut");
-                              }
-                          )
-                        ]
-                    )
-                );
-              },
-            ),
-          ),//Post text
-
-
-          /*
-          Comment Count
-          * */
-          Container(
-            margin: EdgeInsets.only(top: 7, bottom:7),
-            padding: EdgeInsets.only(left:12, right:12),
-            child: GestureDetector(
-              onTap: (){
-                pauseAllVids();
-                Navigator.push(
-                    _pageContext,
-                    MaterialPageRoute(
-                      builder: (BuildContext _navPushCtx){
-                        return ViewPostedComments(postId);
-                      }
-                    )
-                );
-              },
-              child: Text(
-                  _wallComments.length>0 ? "${_wallComments.length} comments, view" : "No comments",
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: _globalFontSize
-                ),
-              ),
-            ),
-          ),//Comment Count
-
-          /*Add new comments
-          * */
-          Container(
-            padding: EdgeInsets.only(left:12, right:12),
-            child: Flex(
-              direction: Axis.horizontal,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                Flexible(
-                  flex: 2,
-                  child: Container(
-                    margin: EdgeInsets.only(right:7),
-                    child: _wallDp,
-                  ),
-                ),//User dp
-
-                Flexible(
-                  flex: 6,
-                  child: Container(
-                    margin: EdgeInsets.only(right:12),
-                    child: TextField(
-                      controller: _wallPostCommentCtr[postId],
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: _globalFontSize
-                      ),
-                      decoration: InputDecoration(
-                        hintText: "Comment as " + globals.fullname,
-                        hintStyle: TextStyle(
-                          color: Colors.grey,
-                          fontSize: _globalFontSize
-                        ),
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none
-                      ),
-                    )
-                  ),
-                ),
-                Flexible(
-                  flex: 2,
-                  child: Container(
-                    alignment: Alignment.centerRight,
-                    child: RaisedButton(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(7)
-                      ),
-                      padding: EdgeInsets.only(top:2, bottom:2, right:12, left:12),
-                      elevation: 0,
-                      color: Color.fromRGBO(36, 36, 36, 1),
-                      onPressed: (){
-                        postComment(postId);
-                      },
-
-                      child:Text(
-                        "Comment",
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Color.fromRGBO(49, 108, 197, 1)
-                        ),
-                      )
-                    ),
-                  )
-                )
-              ],
-            ),
-          ), //Add new comments
-
-          /*Post time
-          * */
-          Container(
-            padding: EdgeInsets.only(left:12, right:12),
-            margin: EdgeInsets.only(top:3),
-            child: Text(
-              wallObj[blockIndex]["time_str"],
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: _globalFontSize
-              ),
-            ),
-          )//post time
-
-        ],
-      ),
-    );
-  }//wall block
 
   ///This is the container placed as the first child of the listview
   ///to show a pull-to-refresh cue
@@ -1070,21 +307,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         child: child
       );
   }//kjut pull to refresh
-
-  ///Get's local data before updating with server data
-  Future<bool> fetchLocalData({String caller}) async{
-    Database con= await dbTables.wallPosts();
-    var result=await con.rawQuery("select * from wall_posts where status='complete' and section='following' order by cast(post_id as unsigned) desc");
-
-    _serverData= result;
-    if(caller == "init"){
-      refreshWall();
-    }
-    if(result.length<1){
-      return false;
-    }
-    return true;
-  }
 
   ///Get fresh contents from server or from database
   ///Updates the database with fresh server contents if it exists
@@ -1258,10 +480,28 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     }
   }//refresh wall
 
+  ///The stream controller for wall list view render changes
+  StreamController wallRenderCtr= StreamController.broadcast();
 
+  double pullRefreshHeight=0;
+  double pullRefreshLoadHeight=80;
+  Future<void> fetchPosts({String caller})async{
+    Database con= await dbTables.wallPosts();
+    _serverData=await con.rawQuery("select * from wall_posts where status='complete' and section='following' order by cast(post_id as signed) desc");
+
+    if(!wallRenderCtr.isClosed){
+      wallRenderCtr.add("kjut");
+    }
+    if(caller == "init"){
+      refreshWall();
+    }
+  }//fetch posts
+
+  static GlobalKey _newPostKey= GlobalKey();
   BuildContext _pageContext;
   Widget pageBody(){
     return Scaffold(
+      backgroundColor: Color.fromRGBO(58, 58, 58, 1),
       bottomNavigationBar:
         Container(
           height: 70,
@@ -1293,24 +533,17 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
               ),//home button
 
               Container(
+                key: _newPostKey,
                 child: Material(
                   color: Colors.transparent,
                   child: InkResponse(
                     onTap: (){
-                      showModalBottomSheet(
-                        context: _pageContext,
-                        backgroundColor: Color.fromRGBO(1, 1, 1, 1),
-                        enableDrag: true,
-                        isScrollControlled: true,
-                        builder: (BuildContext ctx){
-                          return GestureDetector(
-                            onVerticalDragStart: (dragDetails){
-
-                            },
-                            child: NewWallPostDlg(),
-                          );
+                      Navigator.of(_pageContext).push(CircularClipRoute(
+                        expandFrom: _newPostKey.currentContext,
+                        builder: (BuildContext _newPostXtx){
+                          return NewWallPost();
                         }
-                      );
+                      ));
                     },
                     child: Container(
                       width: 60, height: 60,
@@ -1370,73 +603,583 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
           child: Stack(
             children: <Widget>[
               Container(
-                padding: EdgeInsets.only(top:16),
-                decoration: BoxDecoration(
-                  color: Color.fromRGBO(1, 1, 1, 1)
-                ),
+                height: _screenSize.height,
                 child: StreamBuilder(
                   stream: wallRenderCtr.stream,
-                  builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                    if(snapshot.hasData){
-                      return snapshot.data;
-                    }
-                    else{
-                      return Center(
-                        child: CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                        ),
-                      );
-                    }
-                  }
-                ),
-              ),//the page's actual content
-              Positioned(
-                left: 0,top: 5,width: _screenSize.width,
-                height:50,
-                child: StreamBuilder(
-                  stream: _hashTagPosCtr.stream,
-                  builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
-                    return Stack(
-                      children: <Widget>[
-                        AnimatedPositioned(
-                          left: 0, top: _hashTagsTopPos,
-                          width: _screenSize.width, height:50,
-                          child: Container(
-                            alignment: Alignment.centerLeft,
-                            width: _screenSize.width,
-                            child: FutureBuilder(
-                              future: fetchTrendingHashTags(),
-                              builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
-                                if(_snapshot.hasData){
-                                  return _snapshot.data;
+                  builder: (BuildContext _mainctx, AsyncSnapshot _mainshot){
+                    return ListView.builder(
+                        physics: BouncingScrollPhysics(),
+                        controller: wallScrollCtr,
+                        cacheExtent: _screenSize.height * 4,
+                        itemCount: _mainshot.hasData ? (_serverData.length + 1) : 0,
+                        itemBuilder: (BuildContext _mainlvctx, int _mainIndex){
+                          if(_mainIndex == 0){
+                            return Container(
+                              child: Column(
+                                children: <Widget>[
+                                  pullToRefreshContainer(),
+                                  Container(
+                                    child:FutureBuilder(
+                                      future: fetchTrendingHashTags(),
+                                      builder: (BuildContext _ctx, AsyncSnapshot _trendshot){
+                                        if(_trendshot.hasData){
+                                          return _trendshot.data;
+                                        }
+                                        else {
+                                          return Container(
+                                            height: 50, width: _screenSize.width,
+                                            padding: EdgeInsets.only(left:24, top: 9, bottom: 9),
+                                            decoration: BoxDecoration(
+                                              color: Color.fromRGBO(31, 31, 31, 1)
+                                            ),
+                                          );
+                                        }
+                                      },
+                                    ),
+                                  ),//trending tags
+                                ],
+                              ),
+                            );
+                          }
+                          else{
+                            if(_serverData.length > 0){
+                              Map _currentBlock=_serverData[_mainIndex - 1];
+                              bool _islocal=false;
+                              if(_currentBlock.containsKey("section")) _islocal= true;
+                              String _postudp=_currentBlock["dp"];
+                              String _postDir= _appdir.path + "/wall_dir/post_media";
+                              List _postcomments=jsonDecode(_currentBlock["comments"]);
+                              String _postId= _currentBlock["post_id"];
+
+                              if(!_wallBlockKeys.containsKey(_postId)){
+                                _wallBlockKeys[_postId]=GlobalKey();
+                              }
+
+                              if(!wallLikes.containsKey(_postId)){
+                                wallLikes[_postId]=jsonDecode(_currentBlock["likes"]);
+                              }
+                              List _postMedia= jsonDecode(_currentBlock["post_images"]);
+                              int _postMediaCount= _postMedia.length;
+                              List _brkPostAR=_postMedia[0]["ar"].toString().split("/");
+                              double _postAR=double.tryParse(_brkPostAR[0]) / double.tryParse(_brkPostAR[1]);
+                              double _postHeight= _screenSize.width * (1/_postAR);
+
+                              List<Widget> _pvChildren= List<Widget>();
+                              for(int _k=0; _k<_postMediaCount; _k++){
+                                if(_postMedia[_k]["type"] == "video"){
+                                  String _tmpPlayerKey="$_postId.$_k";
+                                  if(!wallVideoCtr.containsKey("$_tmpPlayerKey")) {
+                                    if(_islocal){
+                                      wallVideoCtr["$_tmpPlayerKey"] = VideoPlayerController.file(File(_postDir + "/" + _postMedia[_k]["file"]));
+                                    }
+                                    else{
+                                      wallVideoCtr["$_tmpPlayerKey"] = VideoPlayerController.network(_postMedia[_k]["file"]);
+                                    }
+                                    wallVideoCtr["$_tmpPlayerKey"].initialize().then((value) {
+                                      wallVideoCtr["$_tmpPlayerKey"].setVolume(0);
+                                      wallVideoCtr["$_tmpPlayerKey"].seekTo(Duration(milliseconds: 500));
+                                      wallVideoCtr["$_tmpPlayerKey"].setLooping(true);
+                                    });
+                                  }
+                                  List<String> _brkVAR= _postMedia[_k]["ar"].toString().split("/");
+                                  double _mediaVAR= double.tryParse(_brkVAR[0]) / double.tryParse(_brkVAR[1]);
+
+                                  _pvChildren.add(Container(
+                                    child: AspectRatio(
+                                      aspectRatio: _mediaVAR,
+                                      child: VideoPlayer(
+                                          wallVideoCtr["$_tmpPlayerKey"]
+                                      ),
+                                    ),
+                                  ));
                                 }
-                                else {
-                                  return Container(
-                                  );
+                                else{
+                                  _pvChildren.add(Container(
+                                    width: _screenSize.width,
+                                    decoration: BoxDecoration(
+                                        image: DecorationImage(
+                                            image: (_islocal) ? FileImage(File(_postDir + "/" + _postMedia[_k]["file"])) : NetworkImage(""),
+                                            fit: BoxFit.cover,
+                                            alignment: Alignment.topCenter
+                                        )
+                                    ),
+                                  ));
                                 }
-                              },
-                            ),
-                          ),
-                          duration: Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                        )
-                      ],
+                              }
+                              if(!_wallBooked.containsKey(_postId)){
+                                if(_islocal){
+                                  _wallBooked[_postId]=_currentBlock["book_marked"];
+                                }
+                                else{
+                                  _wallBooked[_postId]="no";
+                                }
+                              }
+                              if(!wallMediaPageCtr.containsKey(_postId)){
+                                _wallPVCurPage[_postId]=0;
+                                wallMediaPageCtr[_postId]= PageController(initialPage: _wallPVCurPage[_postId], keepPage: true);
+                                wallMediaPageCtr[_postId].addListener(() {
+                                  double _localCurPage=wallMediaPageCtr[_postId].page;
+                                  if(_localCurPage.floor() == _localCurPage){
+                                    if(wallMediaPageCtr[_postId].hasClients){
+                                      _wallPVCurPage[_postId]=_localCurPage.toInt();
+                                    }
+                                    pauseAllVids();
+                                    String _localVideoKey=_postId + "." + _localCurPage.toInt().toString();
+                                    if(wallVideoCtr.containsKey(_localVideoKey)){
+                                      wallVideoCtr[_localVideoKey].play();
+                                    }
+                                    pageChangeNotifier.add("kjut");
+                                  }
+                                });
+                              }
+
+                              if(!showMorePost.containsKey(_postId)){
+                                showMorePost[_postId]=false;
+                              }
+
+                              return Container(
+                                key: _wallBlockKeys[_postId],
+                                decoration: BoxDecoration(
+                                    color: Color.fromRGBO(32, 32, 32, 1)
+                                ),
+                                padding: EdgeInsets.only(bottom: 18, top: 18),
+                                margin: EdgeInsets.only(bottom: 2),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Container(
+                                      padding: EdgeInsets.only(left: 18, right:18),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Container(
+                                              child: GestureDetector(
+                                                onTap: (){
+                                                  Navigator.of(_pageContext).push(
+                                                      MaterialPageRoute(
+                                                          builder: (BuildContext _ctx){
+                                                            return WallProfile(_currentBlock["user_id"], username: _currentBlock["fullname"],);
+                                                          }
+                                                      )
+                                                  );
+                                                },
+                                                child: Container(
+                                                  margin: EdgeInsets.only(right:9),
+                                                  child: _postudp.length == 1 ?
+                                                  CircleAvatar(
+                                                    radius: _screenSize.width < 420 ? 15 : 20,
+                                                    child: Text(
+                                                      _postudp,
+                                                      style: TextStyle(
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ):
+                                                  CircleAvatar(
+                                                    radius: _screenSize.width < 420 ? 15 : 20,
+                                                    backgroundImage: _islocal ? FileImage(File("$_postDir/$_postudp")) : NetworkImage(_postudp),
+                                                  ),
+                                                ),
+                                              )
+                                          ),//userdp
+                                          Expanded(
+                                            child: Container(
+                                              child: Column(
+                                                crossAxisAlignment: CrossAxisAlignment.start,
+                                                children: <Widget>[
+                                                  Container(
+                                                      margin: EdgeInsets.only(bottom: 3),
+                                                      child: Wrap(
+                                                        crossAxisAlignment: WrapCrossAlignment.center,
+                                                        direction: Axis.horizontal,
+                                                        children: <Widget>[
+                                                          Container(
+                                                            child: Text(
+                                                              _currentBlock["username"] == "" ? _currentBlock["fullname"] : _currentBlock["username"],
+                                                              style: TextStyle(
+                                                                  color: Colors.grey
+                                                              ),
+                                                            ),
+                                                          ),
+                                                          Container(
+                                                            margin: EdgeInsets.only(left: 16, right: 16),
+                                                            width: 2, height: 2,
+                                                            decoration: BoxDecoration(
+                                                                color: Colors.grey
+                                                            ),
+                                                          ),//separator
+                                                          Container(
+                                                            child: Text(
+                                                              _currentBlock["time_str"],
+                                                              style: TextStyle(
+                                                                  color: Colors.grey
+                                                              ),
+                                                            ),
+                                                          )
+                                                        ],
+                                                      )
+                                                  ),//username and post time
+                                                  Container(
+                                                    child: Wrap(
+                                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                                      children: <Widget>[
+                                                        Container(
+                                                          child: _postcomments.length == 0 ?
+                                                          Text(
+                                                            "No Comments",
+                                                            style: TextStyle(
+                                                                color: Color.fromRGBO(100, 100, 100, 1)
+                                                            ),
+                                                          ): GestureDetector(
+                                                            onTap: (){
+                                                              Navigator.push(_pageContext, MaterialPageRoute(
+                                                                  builder: (BuildContext _routectx){
+                                                                    return ViewPostedComments(_postId);
+                                                                  }
+                                                              ));
+                                                            },
+                                                            child: Container(
+                                                              child: Text(
+                                                                "View " + globals.convertToK(_postcomments.length) + " comments",
+                                                                style: TextStyle(
+                                                                    color: Colors.blueGrey
+                                                                ),
+                                                              ),
+                                                            ),
+                                                          ),
+                                                        ),//view comments
+                                                        Container(
+                                                          margin: EdgeInsets.only(left: 16, right: 16),
+                                                          width: 2, height: 2,
+                                                          decoration: BoxDecoration(
+                                                              color: Colors.grey
+                                                          ),
+                                                        ), //separator
+                                                        StreamBuilder(
+                                                          stream: wallLikeCtr.stream,
+                                                          builder: (BuildContext _likectx, AsyncSnapshot _likeshot){
+                                                            return Container(
+                                                              child: (wallLikes[_postId].length == 0) ? Container(
+                                                                  child: Text(
+                                                                      "No likes",
+                                                                      style: TextStyle(
+                                                                          color: Color.fromRGBO(100, 100, 100, 1)
+                                                                      )
+                                                                  )
+                                                              ): GestureDetector(
+                                                                onTap: (){
+                                                                  Navigator.push(_pageContext, MaterialPageRoute(
+                                                                      builder: (BuildContext _routectx){
+                                                                        return WallPostLikers(_postId);
+                                                                      }
+                                                                  ));
+                                                                },
+                                                                child: Container(
+                                                                    child: Text(
+                                                                      globals.convertToK(wallLikes[_postId].length) + " likes",
+                                                                      style: TextStyle(
+                                                                          color: Colors.blueGrey
+                                                                      ),
+                                                                    )
+                                                                ),
+                                                              ),
+                                                            );
+                                                          },
+                                                        ),//view likes
+                                                      ],
+                                                    ),
+                                                  )//like and comment count
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ),//userdp, username or fullname, likes count
+
+                                    Container(
+                                      height: _postHeight, width: _screenSize.width,
+                                      margin: EdgeInsets.only(top: 12),
+                                      child: Stack(
+                                        children: <Widget>[
+                                          Container(
+                                            height: _postHeight, width: _screenSize.width,
+                                            child: PageView(
+                                              physics: BouncingScrollPhysics(),
+                                              controller: wallMediaPageCtr[_postId],
+                                              children: _pvChildren,
+                                            ),
+                                          ),
+                                          Positioned(
+                                            right: 12, top: 12,
+                                            child:  _postMediaCount >1 ? StreamBuilder(
+                                              stream:pageChangeNotifier.stream,
+                                              builder: (BuildContext _pgnoctx, AsyncSnapshot _pgnoshot){
+                                                return Container(
+                                                  padding: EdgeInsets.only(top:7, bottom: 7, left: 12, right: 12),
+                                                  decoration: BoxDecoration(
+                                                    color: Color.fromRGBO(32, 32, 32, 1),
+                                                    borderRadius: BorderRadius.circular(7)
+                                                  ),
+                                                  child: Text(
+                                                    (_wallPVCurPage[_postId] + 1).toString() + "/" + _postMediaCount.toString(),
+                                                    style: TextStyle(
+                                                      color: Colors.white,
+                                                      fontFamily: "ubuntu"
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ): Container(),
+                                          ),//page number displayer
+                                          Positioned(
+                                            right: 12, bottom: 12,
+                                            child: StreamBuilder(
+                                              stream: pageChangeNotifier.stream,
+                                              builder: (BuildContext _isvidctx, AsyncSnapshot _isvidshot){
+                                                String _locvidid= "$_postId." + _wallPVCurPage[_postId].toString();
+                                                if(wallVideoCtr.containsKey(_locvidid)){
+                                                  return Container(
+                                                    padding: EdgeInsets.only(left: 9, right: 9, top: 9, bottom: 9),
+                                                    decoration: BoxDecoration(
+                                                      color: Color.fromRGBO(32, 32, 32, 1),
+                                                      borderRadius: BorderRadius.circular(12)
+                                                    ),
+                                                    child: StreamBuilder(
+                                                      stream: _vidVolCtrl.stream,
+                                                      builder: (BuildContext _mutectx, AsyncSnapshot _muteshot){
+                                                        return GestureDetector(
+                                                          onTap: (){
+                                                            if(_globalMute){
+                                                              _globalMute=false;
+                                                            }
+                                                            else{
+                                                              _globalMute=true;
+                                                            }
+                                                            _vidVolCtrl.add("kjut");
+                                                            wallVideoCtr.forEach((key, value) {
+                                                              if(_globalMute)value.setVolume(0);
+                                                              else value.setVolume(1);
+                                                            });
+                                                          },
+                                                          child: Container(
+                                                            width: 24, height: 24,
+                                                            child: Icon(
+                                                              _globalMute ? FlutterIcons.volume_mute_faw5s : FlutterIcons.volume_up_faw5s,
+                                                              color: Colors.white,
+                                                            ),
+                                                          ),
+                                                        );
+                                                      },
+                                                    ),
+                                                  );
+                                                }
+                                                else{
+                                                  return Container();
+                                                }
+                                              },
+                                            ),
+                                          )
+                                        ],
+                                      ),
+                                    ), //media slides
+
+                                    Container(
+                                      padding: EdgeInsets.only(top: 12, bottom: 0, left: 16, right: 16),
+                                      child: Row(
+                                        children: <Widget>[
+                                          Container(
+                                            child: Row(
+                                              children: <Widget>[
+                                                StreamBuilder(
+                                                    stream: wallLikeCtr.stream,
+                                                    builder: (BuildContext ctx, AsyncSnapshot snapshot){
+                                                      return Material(
+                                                        color: Colors.transparent,
+                                                        child: InkResponse(
+                                                            onTap: (){
+                                                              int _ilike=wallLikes[_postId].indexOf(globals.userId);
+                                                              if(_ilike>-1){
+                                                                wallLikes[_postId].removeAt(_ilike);
+                                                              }
+                                                              else{
+                                                                wallLikes[_postId].add(globals.userId);
+                                                              }
+                                                              likeUnlikePost(_postId);
+                                                              wallLikeCtr.add("kjut");
+                                                            },
+                                                            child: wallLikes[_postId].indexOf(globals.userId)>-1 ?
+                                                            Container(
+                                                              width: 24, height: 24,
+                                                              child: ScaleTransition(
+                                                                scale: _likeAni,
+                                                                child: Icon(
+                                                                  FlutterIcons.ios_heart_ion,
+                                                                  color: Color.fromRGBO(200, 200, 200, 1),
+                                                                  size: 14,
+                                                                ),
+                                                              ),
+                                                            ):
+                                                            Container(
+                                                              width: 24, height: 24,
+                                                              child: Icon(
+                                                                FlutterIcons.ios_heart_empty_ion,
+                                                                color: Colors.white,
+                                                                size: 14,
+                                                              ),
+                                                            )
+                                                        ),
+                                                      );
+                                                    }
+                                                ),//like icon
+                                                Container(
+                                                  margin:EdgeInsets.only(left:7),
+                                                  child: GestureDetector(
+                                                    onTap: (){
+                                                      Navigator.push(_pageContext, CupertinoPageRoute(
+                                                        builder: (BuildContext _ctx){
+                                                          return ViewPostedComments(_postId);
+                                                        }
+                                                      ));
+                                                    },
+                                                    child: Container(
+                                                      width: 24, height: 24,
+                                                      child: Icon(
+                                                        FlutterIcons.comment_faw5,
+                                                        color: Colors.white,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                )
+                                              ],
+                                            ),
+                                          ),//like and comment
+                                          Expanded(
+                                            child: Container(
+                                              child: StreamBuilder(
+                                                stream: pageChangeNotifier.stream,
+                                                builder: (BuildContext _dotctx, AsyncSnapshot _dotshot){
+                                                  List<Widget> _dots= List<Widget>();
+                                                  for(int _k=0; _k<_postMediaCount; _k++){
+                                                    int _curpage=_wallPVCurPage[_postId];
+                                                    _dots.add(
+                                                      Container(
+                                                        width: _curpage == _k ? 5 : 4, height: _curpage == _k ? 5 : 4,
+                                                        margin: EdgeInsets.only(right: 5),
+                                                        decoration: BoxDecoration(
+                                                          color: _curpage == _k ? Colors.orangeAccent : Colors.grey,
+                                                          borderRadius: BorderRadius.circular(5)
+                                                        ),
+                                                      )
+                                                    );
+                                                  }
+                                                  if(_postMediaCount == 1){
+                                                    _dots= [Container()];
+                                                  }
+                                                  return Container(
+                                                    child: Row(
+                                                      mainAxisAlignment: MainAxisAlignment.center,
+                                                      children: _dots,
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                            ),
+                                          ),// dots
+                                          Container(
+                                            margin:EdgeInsets.only(left: 24),
+                                            child: StreamBuilder(
+                                              stream: _wallBookedCtr.stream,
+                                              builder: (BuildContext _bookCtx, AsyncSnapshot _bookShot){
+                                                return GestureDetector(
+                                                  onTap: (){
+                                                    bookmarkPost(_postId);
+                                                    if(_wallBooked[_postId] == "yes") _wallBooked[_postId]="no";
+                                                    else _wallBooked[_postId]="yes";
+                                                    _wallBookedCtr.add("kjut");
+                                                  },
+                                                  child: Container(
+                                                    width: 24, height: 24,
+                                                    child: Icon(
+                                                      (_wallBooked[_postId] == "yes") ? FlutterIcons.bookmark_faw : FlutterIcons.bookmark_o_faw,
+                                                      color: Colors.white,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ), //bookmark
+                                        ],
+                                      ),
+                                    ),//like, comment slide dots and bookmark
+                                    Container(
+                                      margin: EdgeInsets.only(top: 12),
+                                      padding:EdgeInsets.only(left: 12, right:12),
+                                      child: StreamBuilder(
+                                        stream: showMorePostCtr.stream,
+                                        builder: (BuildContext _moreCtx, AsyncSnapshot _moreshot){
+                                          String _postText=_currentBlock["post_text"];
+                                          if(_screenSize.width<420){
+                                            if(_postText.length > 90 && showMorePost[_postId] == false){
+                                              _postText = _postText.substring(0, 90) + "...";
+                                            }
+                                            else{
+                                              showMorePost[_postId]=true;
+                                            }
+                                          }
+                                          else{
+                                            if(_postText.length > 200 && showMorePost[_postId]==false){
+                                              _postText = _postText.substring(0, 200) + "...";
+                                            }
+                                            else{
+                                              showMorePost[_postId]=true;
+                                            }
+                                          }
+                                          return RichText(
+                                            text: TextSpan(
+                                              children: <TextSpan>[
+                                                TextSpan(
+                                                  children: globals.parseTextForLinks(_postText)
+                                                ),
+                                                showMorePost[_postId] ?
+                                                TextSpan():
+                                                TextSpan(
+                                                    text: " read more...",
+                                                    recognizer: TapGestureRecognizer()..onTap= (){
+                                                      showMorePost[_postId] = !showMorePost[_postId];
+                                                      showMorePostCtr.add("kjut");
+                                                    }
+                                                )
+                                              ]
+                                            ),
+                                          );
+                                        },
+                                      )
+                                    ), //post text
+                                  ],
+                                ),
+                              );
+                            }
+                            else{
+                              return Container(
+                                width: _screenSize.width, height: _screenSize.height - 50,
+                                alignment: Alignment.center,
+                                child: CircularProgressIndicator(),
+                              );
+                            }
+                          }
+                        }
                     );
                   },
                 ),
-              ),
-              StreamBuilder(
-                stream: _pageLoadedNotifier.stream,
-                builder: (BuildContext ctx, AsyncSnapshot snapshot){
-                  return snapshot.hasData ? _kjToast : Container();
-                },
-              )
+              ),//the page's actual content
+
+              _kjToast
             ],
           ),
         ),//page container,
         autofocus: true,
-        onFocusChange: (stat){
-          if(stat){
+        onFocusChange: (bool _isFocused){
+          if(_isFocused){
             //capturing only when focus is gained
             if(_serverData!=null){
               initLocalWallDir();
@@ -1457,11 +1200,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     });
   }
 
-  double _hashTagsTopPos=0;
-  StreamController _hashTagPosCtr= StreamController.broadcast();
-  bool _hashtagisdown=false;
 
-  StreamController _pageLoadedNotifier= StreamController.broadcast();
   final Map<String, GlobalKey> _wallBlockKeys= Map<String, GlobalKey>();
   AnimationController _likeAniCtr;
   Animation<double> _likeAni;
@@ -1469,22 +1208,26 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
   void initState() {
     super.initState();
     wallScrollCtr= ScrollController();
-    wallScrollCtr.addListener(() {
-      if(wallScrollCtr.position.userScrollDirection == ScrollDirection.forward){
-        _hashTagsTopPos=0;
-        _hashtagisdown=false;
-      }
-      else{
-        if(_hashtagisdown==false){
-          _hashTagsTopPos -=1;
-          if(_hashTagsTopPos<-70){
-            _hashTagsTopPos=0;
-            _hashtagisdown=true;
-          }
-        }
-      }
-      _hashTagPosCtr.add("kjut");
 
+    fetchPosts(caller: "init");
+    initLocalWallDir();
+
+    _likeAniCtr= AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: 1200),
+    );
+    _likeAni= Tween(begin: 0.8, end: 1.2).animate(
+      CurvedAnimation(
+      parent: _likeAniCtr, 
+      curve: Curves.elasticOut
+    ));
+    _likeAniCtr.repeat(
+      reverse: true,
+    );
+  }//route's init state
+
+  initLVEvents(){
+    wallScrollCtr.addListener(() {
       List<String> _currentlyVisible=List<String>();
       _wallBlockKeys.forEach((key, value) {
         if(value.currentContext!=null){
@@ -1524,7 +1267,7 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
           }
         });
         if(!wallVideoCtr[_vidKey].value.isPlaying)
-        wallVideoCtr[_vidKey].play();
+          wallVideoCtr[_vidKey].play();
       }
       else if(_visibleVids.length>0){
         String _vidKey=_visibleVids[0];
@@ -1536,25 +1279,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
         if(!wallVideoCtr[_vidKey].value.isPlaying)
           wallVideoCtr[_vidKey].play();
       }
-    });
-    fetchPosts(caller: "init");
-    initLocalWallDir();
-
-    _likeAniCtr= AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: 1200),
-    );
-    _likeAni= Tween(begin: 0.8, end: 1.2).animate(
-      CurvedAnimation(
-      parent: _likeAniCtr, 
-      curve: Curves.elasticOut
-    ));
-    _likeAniCtr.repeat(
-      reverse: true,
-    );
-    WidgetsBinding.instance.addPostFrameCallback((timeStamp) {
-      _kjToast = globals.KjToast(_globalFontSize, _screenSize, toastCtrl, _screenSize.height * .4);
-      _pageLoadedNotifier.add("kjut");
     });
   }
 
@@ -1661,6 +1385,9 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     _screenSize= MediaQuery.of(_pageContext).size;
     if(_screenSize.width> 420) _globalFontSize=14;
     else _globalFontSize=13;
+    if(_kjToast==null){
+      _kjToast=globals.KjToast(_globalFontSize, _screenSize, toastCtrl, _screenSize.height * .4);
+    }
     return WillPopScope(
       child: MaterialApp(
         home: pageBody(),
@@ -1688,7 +1415,6 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     showMorePostCtr.close();
     _wallBookedCtr.close();
     _vidVolCtrl.close();
-    _hashTagPosCtr.close();
   }//close all stream
 
   @override
@@ -1710,5 +1436,5 @@ class _MyWall extends State<MyWall> with SingleTickerProviderStateMixin{
     _likeAniCtr.stop();
     _likeAniCtr.dispose();
     super.dispose();
-  }
+  }//route's init state
 }

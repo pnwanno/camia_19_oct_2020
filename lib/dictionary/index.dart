@@ -7,6 +7,11 @@ import 'package:sqflite/sqflite.dart';
 import 'package:http/http.dart' as http;
 
 import './home.dart';
+import 'word_list.dart';
+import './history.dart';
+import './wod.dart';
+import './affirmation.dart';
+import './weekly_quotes.dart';
 import '../globals.dart' as globals;
 import '../dbs.dart';
 
@@ -15,20 +20,33 @@ enum KDictCurrentPage{
   word_of_the_day,
   affirmation_of_the_day,
   quote_of_the_week,
-  history
+  history,
+  dictionary
 }
 class LWDictionary extends StatefulWidget{
   _LWDictionary createState(){
     return _LWDictionary();
   }
+  final String switchPage;
+  LWDictionary({this.switchPage});
 }
 
 class _LWDictionary extends State<LWDictionary>{
-
-
   initState(){
     super.initState();
     initDatabase();
+    if(widget.switchPage == "dictionary"){
+      currentPage= KDictCurrentPage.dictionary;
+    }
+    else if(widget.switchPage == "wod"){
+      currentPage= KDictCurrentPage.word_of_the_day;
+    }
+    else if(widget.switchPage == "affirmation"){
+      currentPage= KDictCurrentPage.affirmation_of_the_day;
+    }
+    else if(widget.switchPage == "weeklyquotes"){
+      currentPage= KDictCurrentPage.quote_of_the_week;
+    }
   }
 
   DBTables _dbTables= DBTables();
@@ -74,7 +92,7 @@ class _LWDictionary extends State<LWDictionary>{
     }
   }
 
-  KDictCurrentPage _currentPage=KDictCurrentPage.home;
+  static KDictCurrentPage currentPage=KDictCurrentPage.home;
   BuildContext _pageContext;
   @override
   Widget build(BuildContext context) {
@@ -96,11 +114,58 @@ class _LWDictionary extends State<LWDictionary>{
                 ),
                 Container(
                   margin: EdgeInsets.only(left: 16),
-                  child: Text(
-                      "LoveWorld Dictionary",
-                    style: TextStyle(
-              fontFamily: "ubuntu"
-          )
+                  child: StreamBuilder(
+                    stream: _dictCtr.stream,
+                    builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+                      if(currentPage == KDictCurrentPage.home){
+                        return Text(
+                            "LoveWorld Dictionary",
+                            style: TextStyle(
+                                fontFamily: "ubuntu"
+                            )
+                        );
+                      }
+                      else if(currentPage == KDictCurrentPage.history){
+                        return Text(
+                            "Recent Searches",
+                            style: TextStyle(
+                                fontFamily: "ubuntu"
+                            )
+                        );
+                      }
+                      else if(currentPage == KDictCurrentPage.word_of_the_day){
+                        return Text(
+                            "Word of the day",
+                            style: TextStyle(
+                                fontFamily: "sail"
+                            )
+                        );
+                      }
+                      else if(currentPage == KDictCurrentPage.affirmation_of_the_day){
+                        return Text(
+                            "Affirmation Archives",
+                            style: TextStyle(
+                                fontFamily: "ubuntu"
+                            )
+                        );
+                      }
+                      else if(currentPage == KDictCurrentPage.quote_of_the_week){
+                        return Text(
+                            "Weekly Quotes",
+                            style: TextStyle(
+                                fontFamily: "sail"
+                            )
+                        );
+                      }
+                      else{
+                        return Text(
+                            "LoveWorld Dictionary",
+                            style: TextStyle(
+                                fontFamily: "ubuntu"
+                            )
+                        );
+                      }
+                    },
                   ),
                 )
               ],
@@ -121,7 +186,8 @@ class _LWDictionary extends State<LWDictionary>{
                       "Home"
                   ),
                   onTap: (){
-                    _currentPage= KDictCurrentPage.home;
+                    Navigator.pop(_pageContext);
+                    currentPage= KDictCurrentPage.home;
                     _dictCtr.add("kjut");
                   },
                 ),
@@ -137,10 +203,12 @@ class _LWDictionary extends State<LWDictionary>{
                       "Word of the day"
                   ),
                   onTap: (){
-
+                    Navigator.pop(context);
+                    currentPage=KDictCurrentPage.word_of_the_day;
+                    _dictCtr.add("kjut");
                   },
                 ),
-              ),
+              ),//word of the day
               Container(
                 margin: EdgeInsets.only(bottom: 9),
                 child: ListTile(
@@ -152,10 +220,12 @@ class _LWDictionary extends State<LWDictionary>{
                       "Affirmation of the day"
                   ),
                   onTap: (){
-
+                    Navigator.pop(_pageContext);
+                    currentPage=KDictCurrentPage.affirmation_of_the_day;
+                    _dictCtr.add("kjut");
                   },
                 ),
-              ),
+              ),//affirmation of the day
               Container(
                 margin: EdgeInsets.only(bottom: 9),
                 child: ListTile(
@@ -167,10 +237,29 @@ class _LWDictionary extends State<LWDictionary>{
                       "Quote of the week"
                   ),
                   onTap: (){
-
+                    Navigator.pop(context);
+                    currentPage=KDictCurrentPage.quote_of_the_week;
+                    _dictCtr.add("kjut");
                   },
                 ),
-              ),
+              ),//quote of the week
+              Container(
+                margin: EdgeInsets.only(bottom: 9),
+                child: ListTile(
+                  leading: Icon(
+                    FlutterIcons.sort_alphabetical_mco,
+                    color: Colors.blueGrey,
+                  ),
+                  title: Text(
+                      "Dictionary"
+                  ),
+                  onTap: (){
+                    Navigator.pop(_pageContext);
+                    currentPage=KDictCurrentPage.dictionary;
+                    _dictCtr.add("kjut");
+                  },
+                ),
+              ),//dictionary
               Container(
                 margin: EdgeInsets.only(bottom: 9),
                 child: ListTile(
@@ -182,10 +271,12 @@ class _LWDictionary extends State<LWDictionary>{
                       "History"
                   ),
                   onTap: (){
-
+                    Navigator.pop(_pageContext);
+                    currentPage=KDictCurrentPage.history;
+                    _dictCtr.add("kjut");
                   },
                 ),
-              )
+              )//history
             ],
           ),
         ),
@@ -193,15 +284,36 @@ class _LWDictionary extends State<LWDictionary>{
         body: StreamBuilder(
           stream: _dictCtr.stream,
           builder: (BuildContext _ctx, AsyncSnapshot _globsnapshot){
-            if(_currentPage == KDictCurrentPage.home){
+            if(currentPage == KDictCurrentPage.home){
               return DictHome();
+            }
+            else if(currentPage == KDictCurrentPage.dictionary){
+              return DictWords();
+            }
+            else if(currentPage == KDictCurrentPage.history){
+              return SearchHistory();
+            }
+            else if(currentPage == KDictCurrentPage.word_of_the_day){
+              return WOD();
+            }
+            else if(currentPage == KDictCurrentPage.affirmation_of_the_day){
+              return IAffirm();
+            }
+            else if(currentPage == KDictCurrentPage.quote_of_the_week){
+              return WeeklyQuotes();
             }
             return DictHome();
           },
         ),
       ),
       onWillPop: ()async{
-        Navigator.pop(_pageContext);
+        if(currentPage == KDictCurrentPage.home){
+          Navigator.pop(_pageContext);
+        }
+        else{
+          currentPage=KDictCurrentPage.home;
+          _dictCtr.add("kjut");
+        }
         return false;
       },
     );

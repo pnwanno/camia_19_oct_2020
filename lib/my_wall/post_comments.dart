@@ -444,7 +444,7 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
   }//convert to k m or b
   
   dispose(){
-    super.dispose();
+    _likeAniCtr.dispose();
     _pageStreamCtr.close();
     pullRefreshCtr.close();
     _commentLikeCtr.close();
@@ -453,9 +453,9 @@ class _PostComments extends State<ViewPostedComments> with SingleTickerProviderS
     _dpLoadedNotifier.close();
     _replyToCtr.close();
     _viewReplyCtr.close();
-    _likeAniCtr.dispose();
     _globalListCtr.dispose();
     _commentTextCtr.dispose();
+    super.dispose();
   }//route's dispose
 
   RegExp _htag= RegExp(r"^#[a-z0-9_]+$", caseSensitive: false);

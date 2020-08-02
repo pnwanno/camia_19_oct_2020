@@ -23,7 +23,7 @@ class AddVideo extends StatefulWidget{
 
 class _AddVideo extends State<AddVideo>{
 
-  String _globalChannelID="";
+  //String _globalChannelID="";
   Directory _appDir;
   Directory _tvDir;
   Directory _tvTmpDir;
@@ -35,7 +35,7 @@ class _AddVideo extends State<AddVideo>{
 
   FlutterFFmpeg _fFmpeg;
   initDir()async{
-    _globalChannelID=widget.channelID;
+    //_globalChannelID=widget.channelID;
     _appDir= await getApplicationDocumentsDirectory();
     _tvDir= Directory(_appDir.path + "/camtv");
     _tvTmpDir=Directory(_tvDir.path + "/tmp");
@@ -44,7 +44,7 @@ class _AddVideo extends State<AddVideo>{
     _fFmpeg= FlutterFFmpeg();
     _fFmpeg.disableLogs();
     _fFmpeg.enableStatisticsCallback((time, size, bitrate, speed, videoFrameNumber, videoQuality, videoFps){
-      debugPrint("kjut time is $time");
+
     });
   }//initialize the tv directory and path
 

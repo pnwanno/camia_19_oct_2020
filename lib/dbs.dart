@@ -79,6 +79,9 @@ class DBTables{
         onCreate: (db, verse){
           db.execute("create table dict_words (id integer primary key, title text, definition text, source_txt text, bookmarked text, word_id text)");
           db.execute("create table day_word (id integer primary key, title text, definition text, source_txt text, word_id text, day text)");
+          db.execute("create table weekly_quotes (id integer primary key, quote_by text, quote text, week text)");
+          db.execute("create table affirmations (id integer primary key, text text, day text)");
+          db.execute("create table search_history (id integer primary key, title text, word_id text, time_str text)");
         }
     );
     return con;

@@ -404,12 +404,13 @@ class _CitiMag extends State<CitiMag>{
           ],
         ),
       ),
-      onFocusChange: (bool _isFocused){
+      onFocusChange: (bool _isFocused)async{
         if(_isFocused){
           if(_pageBusyCtr.isClosed){
             _pageBusyCtr= StreamController.broadcast();
             _pageDataAvailableNotifier=StreamController.broadcast();
           }
+          //Database _con= await _dbTables();
         }
       },
     );
