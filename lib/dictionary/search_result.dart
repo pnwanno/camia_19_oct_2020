@@ -95,7 +95,7 @@ class _DictSearchResult extends State<DictSearchResult>{
                           width: 48, height: 32,
                           decoration: BoxDecoration(
                               image: DecorationImage(
-                                  image: AssetImage("./images/lw_dict.png"),
+                                  image: AssetImage("./images/lw_lexicon.png"),
                                   fit: BoxFit.contain
                               )
                           ),

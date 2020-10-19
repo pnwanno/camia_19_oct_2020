@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "603367762760",
+    "firebase_url": "https://blw-galaxy.firebaseio.com",
+    "project_id": "blw-galaxy",
+    "storage_bucket": "blw-galaxy.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:603367762760:android:ef4095bca9343ed611a17d",
+        "android_client_info": {
+          "package_name": "com.blwcampusministry.camia"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "603367762760-aqnpa19r1bncvtf76emkdsf8aa5k4bpf.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC_o-aZUeKhUry5suGI_xXGcfahFjGQCe8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "603367762760-aqnpa19r1bncvtf76emkdsf8aa5k4bpf.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

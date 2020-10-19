@@ -12,7 +12,7 @@ description: Official BLW Campus Ministry Mobile App.
 # In iOS, build-name is used as CFBundleShortVersionString while build-number used as CFBundleVersion.
 # Read more about iOS versioning at
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
-version: 1.0.1+2
+version: 1.0.10+10
 
 environment:
   sdk: ">=2.1.0 <3.0.0"
@@ -24,11 +24,8 @@ dependencies:
   sqflite:
   path_provider:
   flutter_sim_country_code:
-  drawing_animation:
   file_picker:
-  liquid_pull_to_refresh:
   flutter_icons:
-  photo_manager:
   camera:
   video_player: ^0.10.11+2
   just_audio:
@@ -41,7 +38,15 @@ dependencies:
   liquid_progress_indicator:
   liquid_swipe:
   circular_clip_route:
-    
+  flutter_cache_manager:
+  flutter_xlider:
+  cached_video_player:
+  firebase_messaging:
+  flutter_local_notifications:
+  contacts_service:
+  permission_handler:
+
+
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^0.1.2
@@ -65,10 +70,6 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
    - images/logo.png
-   - images/plain_logo.png
-   - images/checked.svg
-   - images/cloud.svg
-   - images/exclamation.svg
    - images/camia_girl.png
    - images/explore.gif
    - images/the_blwcm.gif
@@ -77,13 +78,15 @@ flutter:
    - images/mywall.png
    - images/camtv.png
    - images/chapter_finder.png
-   - images/lw_dict.png
+   - images/lw_lexicon.png
    - images/blogs.png
    - images/conferences.png
    - images/radi8.png
    - images/outreaches.png
    - images/donate.png
    - images/citi_mag.png
+   - images/splash2.png
+   - images/galaxy_plain.png
 
   #  - images/a_dot_ham.jpeg
 

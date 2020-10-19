@@ -203,7 +203,6 @@ class _DictHome extends State<DictHome>{
                   });
                 }
                 catch(ex){
-
                 }
               }
             });

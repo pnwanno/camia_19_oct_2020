@@ -216,7 +216,7 @@ class _MagComment extends State<MagComment>{
     _pageContext=context;
     _screenSize=MediaQuery.of(_pageContext).size;
     if(_kjToast == null){
-      _kjToast= globals.KjToast(12.0, _screenSize, _toastCtr, _screenSize.height * .4);
+      _kjToast= globals.KjToast(Color.fromRGBO(20, 20, 20, 1), _screenSize, _toastCtr, _screenSize.height * .4);
     }
     return WillPopScope(
       child: Scaffold(

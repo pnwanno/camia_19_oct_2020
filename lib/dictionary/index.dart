@@ -107,7 +107,7 @@ class _LWDictionary extends State<LWDictionary>{
                   width: 48, height: 48,
                   decoration: BoxDecoration(
                     image: DecorationImage(
-                      image: AssetImage("./images/lw_dict.png"),
+                      image: AssetImage("./images/lw_lexicon.png"),
                       fit: BoxFit.contain
                     )
                   ),

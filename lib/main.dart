@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 
 import 'package:sqflite/sqflite.dart';
+
 import './signin.dart';
 import './confirm_email.dart';
 import './dbs.dart';
 import './launch_page.dart';
 
-void main() {
+void main(){
   runApp(MyApp());
 }
 
@@ -106,7 +107,8 @@ class _MyHomePageState extends State<MyHomePage> {
         curve: Curves.easeInOut,
         decoration: BoxDecoration(
           image: DecorationImage(
-            image: AssetImage("./images/logo.png")
+            image: AssetImage("./images/splash2.png"),
+            fit: BoxFit.fitWidth
           )
         ),
       ),

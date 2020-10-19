@@ -45,6 +45,8 @@
 	<string>Kindly allow Camia use your camera</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kindly allow Camia use your microphone</string>
+	<key>NSContactsUsageDescription</key>
+	<string>BLW Galaxy kindly requests for permission to access your contacts for its Direct Messaging feature</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 	 <key>NSAllowsArbitraryLoads</key>

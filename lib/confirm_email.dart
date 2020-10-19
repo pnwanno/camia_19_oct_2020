@@ -1,13 +1,17 @@
 import 'dart:convert';
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:flutter/gestures.dart';
 import 'package:http/http.dart' as http;
 
 import './dbs.dart';
 import './globals.dart' as globals;
 import './launch_page.dart';
+import './signup.dart';
+
 class ConfirmEmail extends StatefulWidget{
   _ConfirmEmail createState(){
     return _ConfirmEmail();
@@ -17,18 +21,31 @@ class ConfirmEmail extends StatefulWidget{
 }
 
 class _ConfirmEmail extends State<ConfirmEmail>{
-  double toastOpacity=0;
-  String toastText="";
 
   DBTables dbTables=DBTables();
 
-  final formKey= GlobalKey<FormState>();
   TextEditingController _activateCodeCtr= TextEditingController();
   TextEditingController _newPasswordCtr=TextEditingController();
   FocusNode _newpassnode= FocusNode();
 
+  bool _confirming=false;
   tryConfirm()async{
-    if(formKey.currentState.validate()){
+    if(_activateCodeCtr.text==""){
+      showToast(
+        text: "Activation code is required!",
+        persistDur: Duration(seconds: 3)
+      );
+      return;
+    }
+    else if(_newPasswordCtr.text==""){
+      showToast(
+          text: "Choose a new password for your account",
+          persistDur: Duration(seconds: 3)
+      );
+      return;
+    }
+    if(_confirming == false){
+      _confirming=true;
       showLoader(message: "A moment please ...");
       try{
         Database con= await dbTables.loginCon();
@@ -40,340 +57,438 @@ class _ConfirmEmail extends State<ConfirmEmail>{
           if(status == "PENDING"){
             String url=globals.globBaseUrl + "?process_as=activate_account";
             http.Response resp= await http.post(
-              url,
-              body: {
-                "email": uemail,
-                "password": password,
-                "newpassword": _newPasswordCtr.text,
-                "code": _activateCodeCtr.text
-              }
+                url,
+                body: {
+                  "email": uemail,
+                  "password": password,
+                  "newpassword": _newPasswordCtr.text,
+                  "code": _activateCodeCtr.text
+                }
             );
             if(resp.statusCode == 200){
+              _confirming=false;
               hideLoader();
               var respObj= jsonDecode(resp.body);
               if(respObj["status"] == "success"){
-                formKey.currentState.reset();
                 await con.execute("update user_login set password=?, status=?", [_newPasswordCtr.text, 'ACTIVATED']);
                 showToast(
-                  text: respObj["message"],
-                  persistDur: Duration(seconds: 7)
+                    text: respObj["message"],
+                    persistDur: Duration(seconds: 7)
                 );
                 _newPasswordCtr.text="";
                 _activateCodeCtr.text="";
                 Future.delayed(
-                  Duration(seconds: 7),
-                  (){
-                    Navigator.of(_pageContext).push(
-                      MaterialPageRoute(
-                        builder: (BuildContext ctx){
-                          return LaunchPage();
-                        }
-                      )
-                    );
-                  }
+                    Duration(seconds: 8),
+                        (){
+                      Navigator.of(_pageContext).push(
+                          MaterialPageRoute(
+                              builder: (BuildContext ctx){
+                                return LaunchPage();
+                              }
+                          )
+                      );
+                    }
                 );
               }
               else{
                 showToast(
-                  text: respObj["message"],
-                  persistDur: Duration(seconds: 12)
+                    text: respObj["message"],
+                    persistDur: Duration(seconds: 12)
                 );
               }
             }
             else{
               hideLoader();
               showToast(
-                text: "Sorry, we can not handle this request at this time, try again later",
-                persistDur: Duration(seconds: 12)
+                  text: "Sorry, we can not handle this request at this time, try again later",
+                  persistDur: Duration(seconds: 12)
               );
             }
           }
         }
       }
       catch(ex){
+        _confirming=false;
+        hideLoader();
         showToast(
-          text: "Kindly ensure that your device is properly connected to the internet",
-          persistDur: Duration(seconds: 12)
+            text: "Kindly ensure that your device is properly connected to the internet",
+            persistDur: Duration(seconds: 12)
         );
       }
     }
   }
 
   BuildContext _pageContext;
+  Size _screenSize;
   @override
   Widget build(BuildContext context) {
     _pageContext=context;
+    _screenSize= MediaQuery.of(context).size;
+    _toastTop=_screenSize.height * .5;
     return WillPopScope(
-      child: Scaffold(
-        body: Container(
-          child: Stack(
-            children: <Widget>[
-              Container(
-                padding: EdgeInsets.only(left: 24, right: 24, top: 120),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  image: DecorationImage(
-                    image: AssetImage(
-                      "./images/plain_logo.png",
-                    ),
-                    fit: BoxFit.cover
-                  )
-                ),
-                child: Container(
-                  child: Form(
-                    key: formKey,
-                    child: ListView(
-                      children: <Widget>[
-                        Container(
-                          margin: EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            "Hey " + widget.fullnameStr,
-                            style: TextStyle(
-                              fontSize: 32,
-                              color: Colors.white,
-                              fontFamily: "ubuntu"
-                            ),
-                          ),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(bottom: 36),
-                          child: Text(
-                            "Good to have you here",
-                            style: TextStyle(
-                              fontSize: 20,
-                              color: Colors.white
-                            ),
-                          ),
-                        ),
-                        Container(
-                          margin: EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            "Kindly find an activation code, sent to " + widget.emailStr,
-                            style: TextStyle(
-                              fontSize: 16,
-                              color: Colors.white
-                            ),
-                          ),
-                        ),
-                        Container(
-                          padding: EdgeInsets.only(top:12, bottom: 12, left:16, right: 16),
+        child: MaterialApp(
+          home: Scaffold(
+              backgroundColor: Color.fromRGBO(220, 220, 245, 1),
+              body: Stack(
+          children: <Widget>[
+          Container(
+            width: _screenSize.width,
+            height: _screenSize.height,
+            child: ListView(
+              physics: BouncingScrollPhysics(),
+              children: [
+                Container(
+                  height:_screenSize.height * .4,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    overflow: Overflow.visible,
+                    children: [
+                      Positioned(
+                        bottom: -100,
+                        right: -30,
+                        child: Container(
+                          width: _screenSize.width * 2,
+                          height: (_screenSize.width * 2)/1.148,
                           decoration: BoxDecoration(
-                            color: Color.fromRGBO(43, 20, 126, 1),
-                          ),
-                          child: TextFormField(
-                            controller: _activateCodeCtr,
-                            style: TextStyle(
-                              color: Colors.white
-                            ),
-                            decoration: InputDecoration(
-                              hintText: "Enter activation code here",
-                              labelText: "Activation Code",
-                              labelStyle: TextStyle(
-                                color: Colors.white
-                              ),
-                              hintStyle: TextStyle(
-                                color: Colors.white
-                              ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.white
-                                )
-                              ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.white
-                                )
+                              image: DecorationImage(
+                                  image: AssetImage("./images/galaxy_plain.png"),
+                                  fit: BoxFit.fitWidth
                               )
-                            ),
-                            validator: (value){
-                              if(value.isEmpty){
-                                return "Provide activation code here";
-                              }
-                              return null;
-                            },
-                            onEditingComplete: (){
-                              FocusScope.of(_pageContext).requestFocus(_newpassnode);
-                            },
-                            textInputAction: TextInputAction.next,
                           ),
-                        ), //activation code input box
-
-                        Container(
-                          margin: EdgeInsets.only(bottom: 16),
-                          padding: EdgeInsets.only(top:12, bottom: 12, left:16, right: 16),
-                          decoration: BoxDecoration(
-                            color: Color.fromRGBO(43, 20, 126, 1),
-                          ),
-                          child: TextFormField(
-                            controller: _newPasswordCtr,
-                            style: TextStyle(
-                              color: Colors.white
-                            ),
-                            focusNode: _newpassnode,
-                            decoration: InputDecoration(
-                              hintText: "Provide a new password for this account",
-                              labelText: "New Password",
-                              labelStyle: TextStyle(
-                                color: Colors.white
+                        ),
+                      ),
+                      Container(
+                        margin: EdgeInsets.only(top: 150),
+                        padding: EdgeInsets.only(left: 45),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Container(
+                              child: Text(
+                                "Hi " + widget.fullnameStr,
+                                style: TextStyle(
+                                    fontFamily: "ubuntu",
+                                    fontSize: 20,
+                                    color: Color.fromRGBO(100, 180, 150, 1)
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              hintStyle: TextStyle(
-                                color: Colors.white
+                            ),
+                            Container(
+                              width: _screenSize.width - 90,
+                              child: Text(
+                                "Kindly find the activation code sent to " + widget.emailStr,
+                                style: TextStyle(
+                                    color: Color.fromRGBO(200, 180, 150, 1),
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                  fontFamily: "ubuntu"
+                                ),
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.white
-                                )
+                            ),
+                            Container(
+                              width: _screenSize.width - 90,
+                              alignment: Alignment.bottomCenter,
+                              child: Text(
+                                "Complete your registration",
+                                style: TextStyle(
+                                    fontFamily: "pacifico",
+                                    fontSize: 24,
+                                    color: Colors.pinkAccent
+                                ),
                               ),
-                              enabledBorder: OutlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: Colors.white
-                                )
-                              )
-                            ),
-                            validator: (value){
-                              if(value.length<7){
-                                return "Kindly provide a password with at least seven characters";
-                              }
-                              return null;
-                            },
-                            textInputAction: TextInputAction.go,
-                            onEditingComplete: (){
-                              tryConfirm();
-                            },
-                          ),
-                        ), //new password box
-
-                        Container(
-                          child: RaisedButton(
-                            color: Color.fromRGBO(41, 99, 41, 1),
-                            textColor: Colors.white,
-                            elevation: 0,
-                            padding: EdgeInsets.only(top:16, bottom: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24)
-                            ),
-                            onPressed: (){
-                              tryConfirm();
-                            },
-                            child: Text(
-                              "ACTIVATE"
-                            ),
-                          ),
-                        )
-                      ],
-                    ), 
+                            )
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                )
-              ), //form body
+                ),
+                Container(
+                  padding: EdgeInsets.only(left: 28, right: 28),
+                  margin: EdgeInsets.only(top: 80),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        child: Text(
+                          "Activation Code",
+                          style: TextStyle(
+                              color: Color.fromRGBO(64, 64, 64, 1),
+                              fontFamily: "pacifico",
+                              fontSize: 16
+                          ),
+                        ),
+                      ),//activation code
+                      Container(
+                        margin: EdgeInsets.only(top: 3),
+                        padding: EdgeInsets.only(left: 9, right: 9),
+                        decoration: BoxDecoration(
+                            color: Color.fromRGBO(21, 110, 209, 1),
+                            borderRadius: BorderRadius.circular(3)
+                        ),
+                        child: TextField(
+                          controller: _activateCodeCtr,
+                          autofocus: true,
+                          decoration: InputDecoration(
+                              hintText: "Activation code",
+                              hintStyle: TextStyle(
+                                  color: Color.fromRGBO(200, 200, 245, 1)
+                              ),
+                              focusedBorder: InputBorder.none,
+                              enabledBorder: InputBorder.none
+                          ),
+                          style: TextStyle(
+                              color: Colors.white
+                          ),
+                          onEditingComplete: (){
+                            FocusScope.of(context).requestFocus(_newpassnode);
+                          },
+                          textInputAction: TextInputAction.next,
+                        ),
+                      )
+                    ],
+                  ),
+                ),//username
+                Container(
+                  padding: EdgeInsets.only(left: 28, right: 28),
+                  margin: EdgeInsets.only(top: 9),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
 
-              Positioned(
-                bottom: 150,
-                width: MediaQuery.of(_pageContext).size.width - 60,
-                left: 30,
-                child: AnimatedOpacity(
-                  opacity: toastOpacity, 
-                  duration: Duration(milliseconds: 500),
-                  child: Container(
-                    padding: EdgeInsets.only(top: 12, bottom: 12, left: 16, right: 16),
-                    decoration: BoxDecoration(
-                      color: Color.fromRGBO(40, 40, 40, .8),
-                      borderRadius: BorderRadius.circular(24)
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      toastText,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16
+                        child: Text(
+                          "New Password",
+                          style: TextStyle(
+                              color: Color.fromRGBO(32, 32, 32, 1),
+                              fontFamily: "sail",
+                              fontSize: 18
+                          ),
+                        ),
+                      ),//label
+                      Container(
+                        margin: EdgeInsets.only(top: 3),
+                        padding: EdgeInsets.only(left: 9, right: 9),
+                        decoration: BoxDecoration(
+                            color: Color.fromRGBO(21, 110, 209, 1),
+                            borderRadius: BorderRadius.circular(3)
+                        ),
+                        child: TextField(
+                          controller: _newPasswordCtr,
+                          obscureText: true,
+                          decoration: InputDecoration(
+                            hintText: "Choose a new password",
+                            hintStyle: TextStyle(
+                                color: Color.fromRGBO(200, 200, 245, 1)
+                            ),
+                            focusedBorder: InputBorder.none,
+                            enabledBorder: InputBorder.none,
+                          ),
+                          style: TextStyle(
+                              color: Colors.white
+                          ),
+                          focusNode: _newpassnode,
+                        ),
+                      )
+                    ],
+                  ),
+                ),//new password
+                Container(
+                  margin: EdgeInsets.only(left: 28, right: 28, top: 16),
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                      color: Color.fromRGBO(241, 93, 161, 1),
+                      borderRadius: BorderRadius.circular(16)
+                  ),
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: (){
+                        tryConfirm();
+                      },
+                      child: Container(
+                        width: double.infinity,
+                        padding: EdgeInsets.only(top: 12, bottom: 12),
+                        alignment: Alignment.center,
+                        child: Text(
+                          "Complete Sign Up",
+                          style: TextStyle(
+                              color: Colors.white
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                )
-              ),
-            ],
-          ),
-        ),
-      ), 
-      onWillPop: ()async{
-        SystemChannels.platform.invokeMethod("SystemNavigator.pop");
-        return true;
-      }
-    );
-  }//page build method
-
-  BuildContext dlgCtx;
-  displayAlert({@required Widget title, @required Widget content,  List<Widget> action})async{
-    await showDialog(
-      context: _pageContext,
-      builder: (BuildContext localCtx){
-        dlgCtx=localCtx;
-        return AlertDialog(
-          title: title,
-          content: content,
-          actions: (action!=null && action.length>0) ? action: null,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12)
-          ),
-        );
-      }
-    );
-  }//displayAlert
-
-  
-  hideLoader(){
-    Navigator.pop(dlgCtx2);
-  }
-
-  BuildContext dlgCtx2;
-  showLoader({String message}){
-    showGeneralDialog(
-      context: _pageContext,
-      transitionDuration: Duration(milliseconds: 200), 
-      pageBuilder: (BuildContext ctx, ani1, an2){
-        dlgCtx2= ctx;
-        return Material(
-          color: Colors.transparent,
-          child: Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: <Widget>[
-                message != null ? Container(
-                  margin: EdgeInsets.only(bottom: 7),
-                  child: Text(
-                    message,
-                    style: TextStyle(
-                      color: Color.fromRGBO(34,139,34, 1)
+                ),//login btn
+                Container(
+                  margin: EdgeInsets.only(top: 24),
+                  padding: EdgeInsets.only(left: 36, right: 36),
+                  child: RichText(
+                    textScaleFactor: MediaQuery.of(context).textScaleFactor,
+                    text: TextSpan(
+                        children: [
+                          TextSpan(
+                              text: "Don't have an account?",
+                              style: TextStyle(
+                                  color: Color.fromRGBO(64, 64, 64, 1)
+                              )
+                          ),
+                          TextSpan(
+                              text: " Tap here to register",
+                              recognizer: TapGestureRecognizer()..onTap=(){
+                                Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                        builder: (BuildContext _ctx){
+                                          return Signup();
+                                        }
+                                    )
+                                );
+                              },
+                              style: TextStyle(
+                                  color: Colors.blue,
+                                  fontWeight: FontWeight.bold
+                              )
+                          )
+                        ]
                     ),
                   ),
-                ): Container(),
-                Container(
-                  alignment: Alignment.center,
-                  child:  CircularProgressIndicator(),
-                )
+                ),//dont have an account
               ],
-            )
+            ),
           ),
-        );
-      },
-      barrierLabel: MaterialLocalizations.of(_pageContext).modalBarrierDismissLabel,
-      barrierColor: Color.fromRGBO(100, 100, 100, .4),
-      barrierDismissible: false
+          StreamBuilder(
+            stream: _pageBusyCtr.stream,
+            builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+              if(_pageBusy){
+                return Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                          color: Color.fromRGBO(32, 32, 32, .3)
+                      ),
+                      width: _screenSize.width,
+                      height: _screenSize.height,
+                      alignment: Alignment.center,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(
+                              valueColor: AlwaysStoppedAnimation<Color>(Color.fromRGBO(241, 93, 161, 1)),
+                              strokeWidth: 3,
+                            ),
+                          ),
+                          Container(
+                            alignment: Alignment.center,
+                            padding: EdgeInsets.only(left: 24, right: 24),
+                            child: Text(
+                              _busyText,
+                              style: TextStyle(
+                                  color: Colors.white
+                              ),
+                            ),
+                          )
+                        ],
+                      ),
+                    )
+                );
+              }
+              return Positioned(
+                left: 0,
+                bottom: -20,
+                child: Container(),
+              );
+            },
+          ),
+          StreamBuilder(
+            stream: _toastCtr.stream,
+            builder: (BuildContext _ctx, AsyncSnapshot _snapshot){
+              if(_showToast){
+                return Positioned(
+                  left: 0,
+                  top: _toastTop,
+                  child: Container(
+                    alignment: Alignment.center,
+                    width: _screenSize.width - 48,
+                    margin: EdgeInsets.only(left: 24),
+                    padding: EdgeInsets.only(left: 16, right: 16, top: 10, bottom: 10),
+                    decoration: BoxDecoration(
+                        color: Color.fromRGBO(241, 93, 161, 1),
+                        borderRadius: BorderRadius.circular(16)
+                    ),
+                    child: Text(
+                      toastText,
+                      style: TextStyle(
+                          color: Colors.white
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }
+              return Positioned(
+                child: Container(),
+                left: 0,
+                bottom: 0,
+              );
+            },
+          )
+          ],
+        )
+          ),
+        ),
+        onWillPop: (){
+          return handlePagePop();
+        }
+    );
+  }//page build
+
+  handlePagePop() async{
+    SystemChannels.platform.invokeMethod("SystemNavigator.pop");
+    return true;
+  }
+
+  hideLoader(){
+    _pageBusy=false;
+    _pageBusyCtr.add("kjut");
+  }
+
+  bool _pageBusy=false;
+  String _busyText="";
+  showLoader({String message}){
+    _pageBusy=true;
+    _busyText=message;
+    _pageBusyCtr.add("kjut");
+  }
+
+  bool _showToast=false;
+  String toastText="";
+  double _toastTop=0;
+  StreamController _toastCtr= StreamController.broadcast();
+  showToast({String text, Duration persistDur}){
+    toastText=text;
+    _showToast=true;
+    _toastCtr.add("kjut");
+    Future.delayed(
+        persistDur,
+            (){
+          setState(() {
+            _showToast=false;
+            if(!_toastCtr.isClosed){
+              _toastCtr.add("kjut");
+            }
+          });
+        }
     );
   }
 
-  
-  showToast({String text, Duration persistDur}){
-    setState(() {
-      toastText=text;
-      toastOpacity=1;
-    });
-    Future.delayed(
-      persistDur,
-      (){
-        setState(() {
-          toastOpacity=0;
-        });
-      }
-    );
+  StreamController _pageBusyCtr= StreamController.broadcast();
+  @override
+  void dispose() {
+    _toastCtr.close();
+    super.dispose();
   }
 }
